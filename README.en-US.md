@@ -58,9 +58,12 @@ surge support protocol:ss trojan vmess hy2 tuic
 1. Refactor front-end node page to add grouping function (temporarily only some simple functions)
 
 ## [Installation instructions]
+
+The latest release in this fork includes AnyTLS, SOCKS5, HTTP/HTTPS, and VLESS XHTTP support, and removes the login captcha.
+
 ### linux method:
 ```
-curl -s -H “Cache-Control: no-cache” -H “Pragma: no-cache” https://raw.githubusercontent.com/gooaclok819/sublinkX/main/install.sh | sudo bash
+curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/hbsx/sublinkX/main/install.sh | sudo bash
 ```
 
 ```sublink``` Calls out the menu.
@@ -75,11 +78,13 @@ Then cd into the directory and enter the following command to mount the data.
 
 All you need to back up is the db and templates.
 ```
+docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
+
 docker run --name sublinkx -p 8000:8000 \
 -v $PWD/db:/app/db \
 -v $PWD/template:/app/template \
 -v $PWD/logs:/app/logs \
--d jaaksi/sublinkx
+-d hbsx/sublinkx:latest
 ```
 
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
