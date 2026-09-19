@@ -52,16 +52,6 @@ func GetCaptcha(c *gin.Context) {
 func UserLogin(c *gin.Context) {
 	username := c.PostForm("username")
 	password := c.PostForm("password")
-	captchaCode := c.PostForm("captchaCode")
-	captchaKey := c.PostForm("captchaKey")
-	// 验证验证码
-	if !utils.VerifyCaptcha(captchaKey, captchaCode) {
-		log.Println("验证码错误")
-		c.JSON(400, gin.H{
-			"msg": "验证码错误",
-		})
-		return
-	}
 	user := &models.User{Username: username, Password: password}
 	err := user.Verify()
 	if err != nil {

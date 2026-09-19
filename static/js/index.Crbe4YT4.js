@@ -1,0 +1,1 @@
+import{a,aM as e,aN as s,e as r,f as t}from"./index.DeDRmE_P.js";const p=a({__name:"index",setup(a){const p=e(),n=s(),{params:o,query:u}=p,{path:d}=o;return n.replace({path:"/"+d,query:u}),(a,e)=>(r(),t("div"))}});export{p as default};

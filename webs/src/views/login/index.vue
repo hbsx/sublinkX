@@ -63,27 +63,6 @@
           </el-form-item>
         </el-tooltip>
 
-        <!-- 验证码 -->
-        <el-form-item prop="captchaCode">
-          <div class="flex-y-center w-full">
-            <svg-icon icon-class="captcha" class="mx-2" />
-            <el-input
-              v-model="loginData.captchaCode"
-              auto-complete="off"
-              size="large"
-              class="flex-1"
-              :placeholder="$t('login.captchaCode')"
-              @keyup.enter="handleLogin"
-            />
-
-            <el-image
-              @click="getCaptcha"
-              :src="captchaBase64"
-              class="rounded-tr-md rounded-br-md cursor-pointer h-[48px]"
-            />
-          </div>
-        </el-form-item>
-
         <!-- 登录按钮 -->
         <el-button
           :loading="loading"
@@ -104,7 +83,7 @@
 
 <script setup lang="ts">
 import { useSettingsStore, useUserStore } from "@/store";
-import { getCaptchaApi , GetVersion } from "@/api/auth";
+import { GetVersion } from "@/api/auth";
 import { LoginData } from "@/api/auth/types";
 import { Sunny, Moon } from "@element-plus/icons-vue";
 import { LocationQuery, LocationQueryValue, useRoute } from "vue-router";
@@ -136,7 +115,6 @@ const isDark = ref(settingsStore.theme === ThemeEnum.DARK);
 const icpVisible = ref(true);
 const loading = ref(false); // 按钮loading
 const isCapslock = ref(false); // 是否大写锁定
-const captchaBase64 = ref(); // 验证码图片Base64字符串
 const loginFormRef = ref(ElForm); // 登录表单ref
 const { height } = useWindowSize();
 
@@ -166,25 +144,8 @@ const loginRules = computed(() => {
         trigger: "blur",
       },
     ],
-    captchaCode: [
-      {
-        required: true,
-        trigger: "blur",
-        message: t("login.message.captchaCode.required"),
-      },
-    ],
   };
 });
-
-/**
- * 获取验证码
- */
-function getCaptcha() {
-  getCaptchaApi().then(({ data }) => {
-    loginData.value.captchaKey = data.captchaKey;
-    captchaBase64.value = data.captchaBase64;
-  });
-}
 
 /**
  * 登录
@@ -211,9 +172,7 @@ function handleLogin() {
 
           router.push({ path: redirect, query: otherQueryParams });
         })
-        .catch(() => {
-          getCaptcha();
-        })
+        .catch(() => {})
         .finally(() => {
           loading.value = false;
         });
@@ -252,9 +211,6 @@ function checkCapslock(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  getCaptcha();
-});
 </script>
 
 <style lang="scss" scoped>

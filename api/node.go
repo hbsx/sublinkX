@@ -22,6 +22,18 @@ func DocodeNodeName(nd *models.Node) (models.Node, error) { // 解码节点名�
 			return *nd, err
 		}
 		switch {
+		case u.Scheme == "anytls":
+			anytls, err := node.DecodeAnyTLSURL(nd.Link)
+			if err != nil {
+				return *nd, err
+			}
+			nd.Name = anytls.Name
+		case u.Scheme == "socks" || u.Scheme == "socks5" || u.Scheme == "http" || u.Scheme == "https":
+			standard, err := node.DecodeStandardProxyURL(nd.Link)
+			if err != nil {
+				return *nd, err
+			}
+			nd.Name = standard.Name
 		case u.Scheme == "ss":
 			ss, err := node.DecodeSSURL(nd.Link)
 			if err != nil {

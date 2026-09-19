@@ -19,6 +19,7 @@ type Proxy struct {
 	Port               int                    `yaml:"port,omitempty"`
 	Cipher             string                 `yaml:"cipher,omitempty"`
 	Password           string                 `yaml:"password,omitempty"`
+	Username           string                 `yaml:"username,omitempty"`
 	Client_fingerprint string                 `yaml:"client-fingerprint,omitempty"`
 	Tfo                bool                   `yaml:"tfo,omitempty"`
 	Udp                bool                   `yaml:"udp,omitempty"`
@@ -31,6 +32,7 @@ type Proxy struct {
 	Reality_opts       map[string]interface{} `yaml:"reality-opts,omitempty"`
 	Ws_opts            map[string]interface{} `yaml:"ws-opts,omitempty"`
 	Grpc_opts          map[string]interface{} `yaml:"grpc-opts,omitempty"`
+	Xhttp_opts         map[string]interface{} `yaml:"xhttp-opts,omitempty"`
 	Auth_str           string                 `yaml:"auth_str,omitempty"`
 	Auth               string                 `yaml:"auth,omitempty"`
 	Up                 int                    `yaml:"up,omitempty"`
@@ -91,8 +93,53 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 	var proxys []Proxy
 
 	for _, link := range urls {
-		Scheme := strings.Split(link, "://")[0]
+		Scheme := strings.ToLower(strings.Split(link, "://")[0])
 		switch {
+		case Scheme == "anytls":
+			anytls, err := DecodeAnyTLSURL(link)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			if anytls.Name == "" {
+				anytls.Name = fmt.Sprintf("%s:%d", anytls.Server, anytls.Port)
+			}
+			proxys = append(proxys, Proxy{
+				Name:               anytls.Name,
+				Type:               "anytls",
+				Server:             anytls.Server,
+				Port:               anytls.Port,
+				Password:           anytls.Password,
+				Client_fingerprint: anytls.ClientFingerprint,
+				Sni:                anytls.SNI,
+				Alpn:               anytls.ALPN,
+				Udp:                sqlconfig.Udp,
+				Skip_cert_verify:   anytls.SkipCertVerify || sqlconfig.Cert,
+			})
+		case Scheme == "socks" || Scheme == "socks5" || Scheme == "http" || Scheme == "https":
+			standard, err := DecodeStandardProxyURL(link)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			if standard.Name == "" {
+				standard.Name = fmt.Sprintf("%s:%d", standard.Server, standard.Port)
+			}
+			proxyType := "http"
+			if Scheme == "socks" || Scheme == "socks5" {
+				proxyType = "socks5"
+			}
+			proxys = append(proxys, Proxy{
+				Name:             standard.Name,
+				Type:             proxyType,
+				Server:           standard.Server,
+				Port:             standard.Port,
+				Username:         standard.Username,
+				Password:         standard.Password,
+				Tls:              standard.TLS,
+				Udp:              sqlconfig.Udp,
+				Skip_cert_verify: sqlconfig.Cert,
+			})
 		case Scheme == "ss":
 			ss, err := DecodeSSURL(link)
 			if err != nil {
@@ -232,12 +279,21 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				"grpc-mode":         "gun",
 				"grpc-service-name": vless.Query.ServiceName,
 			}
+			xhttp_opts := map[string]interface{}{
+				"path": vless.Query.Path,
+				"host": vless.Query.Host,
+				"mode": vless.Query.Mode,
+			}
+			if vless.Query.Type != "xhttp" {
+				xhttp_opts = nil
+			}
 			if vless.Query.Mode == "multi" {
 				grpc_opts["grpc-mode"] = "multi"
 			}
 			DeleteOpts(ws_opts)
 			DeleteOpts(reality_opts)
 			DeleteOpts(grpc_opts)
+			DeleteOpts(xhttp_opts)
 			tls := false
 			if vless.Query.Security != "" {
 				tls = true
@@ -259,6 +315,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Ws_opts:            ws_opts,
 				Reality_opts:       reality_opts,
 				Grpc_opts:          grpc_opts,
+				Xhttp_opts:         xhttp_opts,
 				Udp:                sqlconfig.Udp,
 				Skip_cert_verify:   sqlconfig.Cert,
 				Tls:                tls,

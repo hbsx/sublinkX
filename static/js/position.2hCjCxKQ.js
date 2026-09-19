@@ -1,0 +1,1 @@
+const t=t=>{let e,c;return"touchend"===t.type?(c=t.changedTouches[0].clientY,e=t.changedTouches[0].clientX):t.type.startsWith("touch")?(c=t.touches[0].clientY,e=t.touches[0].clientX):(c=t.clientY,e=t.clientX),{clientX:e,clientY:c}};export{t as g};
