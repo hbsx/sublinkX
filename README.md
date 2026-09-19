@@ -27,17 +27,25 @@
 
 ## [项目特色]
 
-自由度和安全性较高，能够记录访问订阅，配置轻松
+* 订阅管理、节点分组、访问记录与模板配置集中在同一套 Web 管理界面。
+* 同时提供 Linux 二进制安装、升级菜单与 Docker 构建方式；数据目录可独立挂载、便于备份迁移。
+* 输出 v2ray Base64 通用订阅、Clash YAML 与 Surge 配置，按客户端自动过滤不兼容节点。
+* 最新分支已移除登录验证码；首次使用后请立即修改默认管理员密码。
 
-二进制编译无需Docker容器
+### 支持的节点协议
 
-目前仅支持客户端：v2ray clash surge
+| 协议 | 订阅解析 | Clash 输出 | Surge 输出 |
+| --- | --- | --- | --- |
+| Shadowsocks (SS) / ShadowsocksR (SSR) | 支持 | 支持 | SS 支持 |
+| VMess | 支持 | 支持 | 支持 |
+| VLESS（含 XHTTP） | 支持 | 支持 | 客户端不支持时自动过滤 |
+| Trojan | 支持 | 支持 | 支持 |
+| Hysteria / Hysteria2 | 支持 | 支持 | Hysteria2 支持 |
+| TUIC | 支持 | 支持 | 支持 |
+| AnyTLS | 支持 | 支持 | 客户端不支持时自动过滤 |
+| SOCKS5、HTTP、HTTPS 代理链接 | 支持 | 支持 | 客户端不支持时自动过滤 |
 
-v2ray为base64通用格式
-
-clash支持协议:ss ssr trojan vmess vless hy hy2 tuic
-
-surge支持协议:ss trojan vmess hy2 tuic
+协议是否可用仍取决于订阅客户端自身版本；生成时会优先保留该客户端能够识别的节点，避免产生无效配置。
 
 ## [项目预览]
 

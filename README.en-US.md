@@ -26,17 +26,25 @@ Because of the rewrite there are still a lot of layout structure and a little le
 
 ## [Project Features]
 
-High degree of freedom and security, the ability to record access to the subscription, easy configuration
+* Manage subscriptions, node groups, access records, and templates from one web console.
+* Install with a Linux binary and upgrade menu, or build with Docker. Data directories can be mounted separately for backup and migration.
+* Generate v2ray Base64 subscriptions, Clash YAML, and Surge configurations. Incompatible nodes are filtered for the selected client.
+* The latest branch removes the login captcha. Change the default administrator password immediately after first use.
 
-Binary compilation without Docker container.
+### Supported node protocols
 
-Currently only supports the client: v2ray clash surge
+| Protocol | Parse subscription | Clash output | Surge output |
+| --- | --- | --- | --- |
+| Shadowsocks (SS) / ShadowsocksR (SSR) | Yes | Yes | SS only |
+| VMess | Yes | Yes | Yes |
+| VLESS (including XHTTP) | Yes | Yes | Filtered when unsupported |
+| Trojan | Yes | Yes | Yes |
+| Hysteria / Hysteria2 | Yes | Yes | Hysteria2 only |
+| TUIC | Yes | Yes | Yes |
+| AnyTLS | Yes | Yes | Filtered when unsupported |
+| SOCKS5, HTTP, and HTTPS proxy URLs | Yes | Yes | Filtered when unsupported |
 
-v2ray is a base64 universal format
-
-clash supported protocols: ss ssr trojan vmess vless hy hy2 tuic
-
-surge support protocol:ss trojan vmess hy2 tuic
+Actual availability also depends on the receiving client's version. Unsupported nodes are filtered rather than emitted as unusable configuration.
 
 ## [Project Preview]
 
