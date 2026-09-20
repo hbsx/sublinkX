@@ -101,7 +101,7 @@ docker run --name sublinkx -p 8000:8000 \
 可以通过 --build-arg 参数将代理注入到构建过程中：
 
 ```bash
-mkdir -p db template logs && \
+mkdir -p sublinkx/db sublinkx/template sublinkx/logs && cd sublinkx && \
 docker build --build-arg GOPROXY=https://goproxy.cn,direct -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git && \
 docker run --name sublinkx -p 8000:8000 \
 -v $PWD/db:/app/db \
@@ -109,8 +109,6 @@ docker run --name sublinkx -p 8000:8000 \
 -v $PWD/logs:/app/logs \
 -d hbsx/sublinkx:latest
 ```
-
-
 
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
 
