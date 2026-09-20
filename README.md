@@ -108,6 +108,7 @@ docker run --name sublinkx -p 8000:8000 \
 -v $PWD/template:/app/template \
 -v $PWD/logs:/app/logs \
 -d hbsx/sublinkx:latest
+docker builder prune -f
 ```
 
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
