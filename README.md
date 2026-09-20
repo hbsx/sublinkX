@@ -97,6 +97,13 @@ docker run --name sublinkx -p 8000:8000 \
 -d hbsx/sublinkx:latest
 ```
 
+在 docker build 命令中加上 Go 代理参数 GOPROXY。因为之前编译耗时最长的是下载 Go 依赖包（go mod download），加上国内代理后下载速度会提升几倍甚至几十倍。
+可以通过 --build-arg 参数将代理注入到构建过程中：
+docker build \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
+  -t hbsx/sublinkx:latest \
+  https://github.com/hbsx/sublinkX.git
+
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
 
 Thank you to the ZMTO team for your support. I look forward to leveraging this VPS to optimize my project's performance and development efficiency. If you have any questions or suggestions regarding my project, feel free to open an issue, and I will do my best to improve and optimize it.
