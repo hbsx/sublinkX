@@ -101,8 +101,8 @@ docker run --name sublinkx -p 8000:8000 \
 可以通过 --build-arg 参数将代理注入到构建过程中：
 
 ```bash
-docker build --build-arg GOPROXY=[https://goproxy.cn](https://goproxy.cn),direct -t hbsx/sublinkx:latest [https://github.com/hbsx/sublinkX.git](https://github.com/hbsx/sublinkX.git)
-
+mkdir -p db template logs && \
+docker build --build-arg GOPROXY=https://goproxy.cn,direct -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git && \
 docker run --name sublinkx -p 8000:8000 \
 -v $PWD/db:/app/db \
 -v $PWD/template:/app/template \
