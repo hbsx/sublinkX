@@ -42,14 +42,10 @@ func Templateinit() {
 		log.Println(err)
 		return // 如果出错，直接返回
 	}
-	// 创建template目录
-	_, err = os.Stat("./template")
-	if os.IsNotExist(err) {
-		err = os.Mkdir("./template", 0666)
-		if err != nil {
-			log.Println(err)
-			return
-		}
+	// 创建 template 目录。目录需要执行权限才能访问其中的文件。
+	if err = os.MkdirAll("./template", 0755); err != nil {
+		log.Println(err)
+		return
 	}
 	// 写入默认模板
 	for _, entry := range entries {

@@ -1,9 +1,7 @@
 services:
   sublinkx:
-    image: hbsx/sublinkx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/hbsx/sublinkx:latest
+    pull_policy: always
     container_name: sublinkx
     ports:
       - "8000:8000"

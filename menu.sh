@@ -1,161 +1,185 @@
-#!/bin/bash
-function Up {
-    # 获取最新的发行版标签
-    latest_release=$(curl --silent "https://api.github.com/repos/hbsx/sublinkX/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    echo "最新版本: $latest_release"
-    # 检测机器类型
-    machine_type=$(uname -m)
+#!/usr/bin/env bash
 
-    if [ "$machine_type" = "x86_64" ]; then
-        file_name="sublink_amd64"
-    elif [ "$machine_type" = "aarch64" ]; then
-        file_name="sublink_arm64"
-    else
-        echo "不支持的机器类型: $machine_type"
-        exit 1
-    fi
+set -uo pipefail
 
-    # 下载文件
-    curl -LO "https://github.com/hbsx/sublinkX/releases/download/$latest_release/$file_name"
+SERVICE_NAME="sublink"
+INSTALL_DIR="/usr/local/bin/sublink"
+BINARY="$INSTALL_DIR/sublink"
+SERVICE_FILE="/etc/systemd/system/sublink.service"
+REPOSITORY="hbsx/sublinkX"
 
-    # 设置文件为可执行
-    chmod +x $file_name
+if [ "$(id -u)" -ne 0 ]; then
+    echo "请以 root 身份运行 sublink 菜单。" >&2
+    exit 1
+fi
 
-    # 移动文件到指定目录
-    mv $file_name "$INSTALL_DIR/sublink"
-    echo "更新完成"
-
+get_latest_release() {
+    curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" \
+        | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | head -n 1
 }
-function Select {
-    # 获取最新的发行版标签
-    latest_release=$(curl --silent "https://api.github.com/repos/hbsx/sublinkX/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    # 获取服务状态
-    cd /usr/local/bin/sublink # 进入sublink目录
-    status=$(systemctl is-active sublink)
-    version=$(./sublink --version)
-    echo "最新版本:$latest_release"
-    echo "当前版本:$version"
-    # 判断服务状态并打印
-    if [ "$status" = "active" ]; then
-        echo "当前运行状态: 已运行"
-    else
-        echo "当前运行状态: 未运行"
+
+get_asset_name() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "sublink_amd64" ;;
+        aarch64|arm64) echo "sublink_arm64" ;;
+        *) return 1 ;;
+    esac
+}
+
+update_sublink() {
+    local latest_release current_version asset_name temporary_file
+
+    latest_release=$(get_latest_release) || true
+    if [ -z "$latest_release" ]; then
+        echo "无法获取最新发行版标签。" >&2
+        return 1
     fi
+
+    current_version=$($BINARY --version 2>/dev/null || true)
+    if [ "$current_version" = "$latest_release" ]; then
+        echo "当前已经是最新版本: $current_version"
+        return 0
+    fi
+
+    asset_name=$(get_asset_name) || {
+        echo "不支持的机器类型: $(uname -m)" >&2
+        return 1
+    }
+
+    temporary_file=$(mktemp)
+    if ! curl -fL --retry 3 \
+        "https://github.com/$REPOSITORY/releases/download/$latest_release/$asset_name" \
+        -o "$temporary_file"; then
+        rm -f "$temporary_file"
+        echo "下载更新失败，原服务未受影响。" >&2
+        return 1
+    fi
+
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    if ! install -m 0755 "$temporary_file" "$BINARY"; then
+        rm -f "$temporary_file"
+        systemctl start "$SERVICE_NAME" 2>/dev/null || true
+        echo "安装更新失败，已尝试恢复服务。" >&2
+        return 1
+    fi
+    rm -f "$temporary_file"
+
+    if systemctl start "$SERVICE_NAME"; then
+        echo "更新完成: ${current_version:-未知版本} -> $latest_release"
+    else
+        echo "更新已安装，但服务启动失败。请运行 systemctl status $SERVICE_NAME 查看原因。" >&2
+        return 1
+    fi
+}
+
+change_port() {
+    local port
+
+    read -r -p "请输入新的端口号: " port
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        echo "端口必须是 1 到 65535 之间的数字。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$SERVICE_FILE" ]; then
+        echo "服务文件不存在: $SERVICE_FILE" >&2
+        return 1
+    fi
+
+    sed -i "s|^ExecStart=.*|ExecStart=$BINARY run --port $port|" "$SERVICE_FILE"
+    systemctl daemon-reload
+    systemctl restart "$SERVICE_NAME"
+    echo "端口已修改为 $port，服务已重启。"
+}
+
+reset_credentials() {
+    local username password
+
+    read -r -p "请输入新的账号: " username
+    read -r -s -p "请输入新的密码: " password
+    echo
+
+    if [ -z "$username" ] || [ -z "$password" ]; then
+        echo "账号和密码不能为空。" >&2
+        return 1
+    fi
+
+    (cd "$INSTALL_DIR" && "$BINARY" setting --username "$username" --password "$password")
+    systemctl restart "$SERVICE_NAME"
+    echo "账号密码已重置，服务已重启。"
+}
+
+uninstall_sublink() {
+    local delete_data
+
+    systemctl disable --now "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$SERVICE_FILE" "$BINARY" /usr/bin/sublink
+    systemctl daemon-reload
+
+    read -r -p "是否删除数据库、模板和日志？此操作不可恢复 (y/N): " delete_data
+    if [[ "$delete_data" =~ ^[Yy]$ ]]; then
+        rm -rf "$INSTALL_DIR/db" "$INSTALL_DIR/template" "$INSTALL_DIR/logs"
+    fi
+
+    rmdir "$INSTALL_DIR" 2>/dev/null || true
+    echo "卸载完成。"
+}
+
+while true; do
+    latest_release=$(get_latest_release 2>/dev/null || true)
+    current_version=$($BINARY --version 2>/dev/null || echo "未安装")
+    service_status=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)
+
+    echo "最新版本: ${latest_release:-获取失败}"
+    echo "当前版本: $current_version"
+    echo "当前运行状态: ${service_status:-未知}"
     echo "1. 启动服务"
     echo "2. 停止服务"
-    echo "3. 卸载安装"
+    echo "3. 卸载"
     echo "4. 查看服务状态"
     echo "5. 查看运行目录"
     echo "6. 修改端口"
     echo "7. 更新"
     echo "8. 重置账号密码"
     echo "0. 退出"
-    echo -n "请选择一个选项: "
-    read option
+    read -r -p "请选择一个选项: " option
 
-    case $option in
+    case "$option" in
         1)
-            systemctl start sublink
             systemctl daemon-reload
+            systemctl start "$SERVICE_NAME"
             ;;
         2)
-            systemctl stop sublink
-            systemctl daemon-reload
+            systemctl stop "$SERVICE_NAME"
             ;;
         3)
-            # 停止服务之前检查服务是否存在
-            if systemctl is-active --quiet sublink; then
-                systemctl stop sublink
-            fi
-            if systemctl is-enabled --quiet sublink; then
-                systemctl disable sublink
-            fi
-            # 删除服务文件
-            if [ -f /etc/systemd/system/sublink.service ]; then
-                sudo rm /etc/systemd/system/sublink.service
-            fi
-            # 删除相关文件和目录
-            sudo rm -r /usr/local/bin/sublink/sublink
-            sudo rm -r /usr/bin/sublink
-            read -p "是否删除模板文件和数据库(y/n): " isDelete
-            if [ "$isDelete" = "y" ]; then
-                sudo rm -r /usr/local/bin/sublink/db
-                sudo rm -r /usr/local/bin/sublink/template
-                sudo rm -r /usr/local/bin/sublink/logs
-            fi
-            echo "卸载完成"
+            uninstall_sublink
+            exit 0
             ;;
         4)
-            systemctl status sublink
+            systemctl status "$SERVICE_NAME" --no-pager
             ;;
         5)
-            echo "运行目录: /usr/local/bin/sublink"
-            echo "需要备份的目录为db,template目录为模版文件可备份可不备份"
-            cd /usr/local/bin/sublink
+            echo "运行目录: $INSTALL_DIR"
+            ls -la "$INSTALL_DIR"
             ;;
         6)
-            SERVICE_FILE="/etc/systemd/system/sublink.service"
-            read -p "请输入新的端口号: " Port
-            echo "新的端口号: $Port"
-            PARAMETER="run --port $Port"
-            # 检查服务文件是否存在
-            if [ ! -f "$SERVICE_FILE" ]; then
-                echo "服务文件不存在: $SERVICE_FILE"
-                exit 1
-            fi
-
-            # 检查 ExecStart 是否已经包含该参数
-            if grep -q "run --port" "$SERVICE_FILE"; then
-                echo "参数已存在，正在替换..."
-                # 使用 sed 替换 ExecStart 行中的 -port 参数
-                sudo sed -i "s/-port [0-9]\+/-port $Port/" "$SERVICE_FILE"
-            else
-                # 如果没有 -port 参数，添加新参数
-                # 使用 sed 替换 ExecStart 行，添加启动参数
-                sudo sed -i "/^ExecStart=/ s|$| $PARAMETER|" "$SERVICE_FILE"
-                echo "参数已添加到 ExecStart 行: $PARAMETER"
-            fi
-
-            # 重新加载 systemd 守护进程
-            sudo systemctl daemon-reload
-            # 重启 sublink 服务
-            sudo systemctl restart sublink
-
-            echo "服务已重启。"
-
+            change_port
             ;;
         7)
-            # 停止服务之前检查服务是否存在
-            if systemctl is-active --quiet sublink; then
-                systemctl stop sublink
-            fi
-            # 检查是否为最新版本
-            if [[ $version = $latest_release ]]; then
-                echo "当前已经是最新版本"
-            else
-                Up
-            fi
+            update_sublink
             ;;
         8)
-            read -p "请输入新的账号: " User
-            read -p "请输入新的密码: " Password
-            # 运行二进制文件并传递启动参数，放在后台运行
-            cd /usr/local/bin/sublink
-            ./sublink setting --username "$User" --password "$Password" &
-            # 获取该程序的PID
-            pid=$!
-            # 等待程序完成
-            wait $pid
-            # 如果需要可以在此处进行清理
-            systemctl restart sublink
+            reset_credentials
             ;;
         0)
             exit 0
             ;;
         *)
-            echo "无效的选项,请重新选择"
-            Select
+            echo "无效的选项，请重新选择。"
             ;;
     esac
-}
-Select
+
+    echo
+done

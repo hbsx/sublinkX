@@ -85,17 +85,26 @@ Docker Compose is recommended:
 ```bash
 git clone https://github.com/hbsx/sublinkX.git
 cd sublinkX
-docker compose up -d --build
+docker compose up -d
 ```
 
-Persistent data is stored in `data/db`, `data/template`, and `data/logs`. The Compose configuration uses `restart: unless-stopped`, so the container starts again after Docker or the server restarts.
+Compose pulls the matching AMD64, ARMv7, or ARM64 image built by this repository. Persistent data is stored in `data/db`, `data/template`, and `data/logs`. The configuration uses `restart: unless-stopped`, so the container starts again after Docker or the server restarts.
+
+To update a Compose deployment:
+
+```bash
+cd sublinkX
+git pull --ff-only
+docker compose pull
+docker compose up -d
+```
 
 To use `docker run` instead:
 
 ```bash
 mkdir -p ~/sublinkx/db ~/sublinkx/template ~/sublinkx/logs
 cd ~/sublinkx
-docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
+docker pull ghcr.io/hbsx/sublinkx:latest
 docker run -d \
   --name sublinkx \
   --restart unless-stopped \
@@ -103,7 +112,7 @@ docker run -d \
   -v "$PWD/db:/app/db" \
   -v "$PWD/template:/app/template" \
   -v "$PWD/logs:/app/logs" \
-  hbsx/sublinkx:latest
+  ghcr.io/hbsx/sublinkx:latest
 ```
 
 For a container created with the older instructions, add the restart policy without recreating it:

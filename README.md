@@ -87,16 +87,25 @@ curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubuse
 ```bash
 git clone https://github.com/hbsx/sublinkX.git
 cd sublinkX
-docker compose up -d --build
+docker compose up -d
 ```
 
-运行数据保存在仓库目录下的 `data/db`、`data/template` 和 `data/logs` 中。Compose 已配置 `restart: unless-stopped`，Docker 服务或服务器重启后会自动恢复容器。
+Compose 会拉取本仓库自动构建的 AMD64、ARMv7 或 ARM64 镜像。运行数据保存在仓库目录下的 `data/db`、`data/template` 和 `data/logs` 中。配置已启用 `restart: unless-stopped`，Docker 服务或服务器重启后会自动恢复容器。
 
 查看状态和日志：
 
 ```bash
 docker compose ps
 docker compose logs --tail=100 sublinkx
+```
+
+更新 Compose 部署：
+
+```bash
+cd sublinkX
+git pull --ff-only
+docker compose pull
+docker compose up -d
 ```
 
 #### Docker run
@@ -126,12 +135,12 @@ cd ~/sublinkx
 
 不需要手工创建上述文件。容器首次启动后，程序会自动生成数据库、配置文件和默认模板。
 
-##### 3. 构建镜像
+##### 3. 拉取镜像
 
-直接从本仓库最新版源码构建：
+拉取与服务器架构匹配的最新版镜像：
 
 ```bash
-docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
+docker pull ghcr.io/hbsx/sublinkx:latest
 ```
 
 ##### 4. 创建并启动容器
@@ -146,7 +155,7 @@ docker run -d \
   -v "$PWD/db:/app/db" \
   -v "$PWD/template:/app/template" \
   -v "$PWD/logs:/app/logs" \
-  hbsx/sublinkx:latest
+  ghcr.io/hbsx/sublinkx:latest
 ```
 
 启动后检查容器状态和日志：
@@ -176,7 +185,7 @@ docker update --restart unless-stopped sublinkx
 ```bash
 cd ~/sublinkx
 docker rm -f sublinkx
-docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
+docker pull ghcr.io/hbsx/sublinkx:latest
 docker run -d \
   --name sublinkx \
   --restart unless-stopped \
@@ -184,7 +193,7 @@ docker run -d \
   -v "$PWD/db:/app/db" \
   -v "$PWD/template:/app/template" \
   -v "$PWD/logs:/app/logs" \
-  hbsx/sublinkx:latest
+  ghcr.io/hbsx/sublinkx:latest
 ```
 
 ##### 6. 备份数据
@@ -196,15 +205,15 @@ cd ~/sublinkx
 tar -czf "sublinkx-backup-$(date +%F).tar.gz" db template
 ```
 
-##### 7. 可选：清理构建缓存
+##### 7. 可选：清理无用镜像
 
-如果构建成功后近期不再重新安装或更新，可以手动清理未使用的 Docker 构建缓存：
+更新完成后，可以清理不再使用的旧镜像层：
 
 ```bash
-docker builder prune -f
+docker image prune -f
 ```
 
-该命令不会删除已经构建的镜像、正在运行的容器，也不会删除挂载的 `db`、`template` 和 `logs` 数据。清理后下次重新构建时需要再次下载依赖，请按需执行。
+该命令不会删除正在使用的镜像、容器或挂载的 `db`、`template` 和 `logs` 数据。
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
 
 Thank you to the ZMTO team for your support. I look forward to leveraging this VPS to optimize my project's performance and development efficiency. If you have any questions or suggestions regarding my project, feel free to open an issue, and I will do my best to improve and optimize it.

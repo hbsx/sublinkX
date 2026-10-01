@@ -12,17 +12,13 @@ var DB *gorm.DB
 var isInitialized bool
 
 func InitSqlite() {
-	// 检查目录是否创建
-	_, err := os.Stat("./db")
-	if err != nil {
-		if os.IsNotExist(err) {
-			os.Mkdir("./db", os.ModePerm)
-		}
+	if err := os.MkdirAll("./db", 0755); err != nil {
+		log.Fatal("创建数据库目录失败: ", err)
 	}
 	// 连接数据库
 	db, err := gorm.Open(sqlite.Open("./db/sublink.db"), &gorm.Config{})
 	if err != nil {
-		log.Println("连接数据库失败")
+		log.Fatal("连接数据库失败: ", err)
 	}
 	DB = db
 	// 检查是否已经初始化

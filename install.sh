@@ -69,7 +69,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now sublink
+systemctl enable sublink
+systemctl restart sublink
 
 curl -fL --retry 3 \
     -H "Cache-Control: no-cache" \
