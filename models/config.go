@@ -1,10 +1,11 @@
 package models
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
-	"sublink/utils"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,18 +29,20 @@ var comment string = `# jwt_secret: JWT密钥
 `
 
 // 初始化配置
-func ConfigInit() {
+func ConfigInit() error {
 	if err := os.MkdirAll("./db", 0755); err != nil {
-		log.Println("创建配置目录失败:", err)
-		return
+		return fmt.Errorf("创建配置目录失败: %w", err)
 	}
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat("./db/config.yaml"); os.IsNotExist(err) {
-		R := utils.RandString(31) // 生成随机字符串作为JWT密钥
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return fmt.Errorf("生成 JWT 密钥失败: %w", err)
+		}
 		// 如果不存在则创建默认配置文件
 		defaultConfig := Config{
-			JwtSecret:  R, // 生成随机JWT密钥
+			JwtSecret:  hex.EncodeToString(secret),
 			ExpireDays: 14,
 			Port:       8000, // 默认端口
 		}
@@ -47,39 +50,54 @@ func ConfigInit() {
 		// 生成yaml文件
 		data, err := yaml.Marshal(&defaultConfig)
 		if err != nil {
-			log.Println("生成默认配置文件失败:", err)
-			return
+			return fmt.Errorf("生成默认配置文件失败: %w", err)
 		}
 		data = []byte(comment + string(data)) // 添加注释
-		err = os.WriteFile("./db/config.yaml", data, 0644)
+		err = os.WriteFile("./db/config.yaml", data, 0600)
 		if err != nil {
-			fmt.Println("写入文件失败:", err)
-			return
+			return fmt.Errorf("写入配置文件失败: %w", err)
 		}
 		log.Println("配置文件不存在，已创建默认配置文件")
 	}
+	return nil
 }
 
 // 读取配置
 func ReadConfig() Config {
-	cfg := Config{ExpireDays: 14, Port: 8000}
-	file, err := os.ReadFile("./db/config.yaml")
+	cfg, err := LoadConfig()
 	if err != nil {
 		log.Println(err)
-		return cfg
-	}
-	if err := yaml.Unmarshal(file, &cfg); err != nil {
-		log.Println("读取配置文件失败:", err)
-	}
-	if cfg.Port < 1 || cfg.Port > 65535 {
-		cfg.Port = 8000
 	}
 	return cfg
 }
 
+func LoadConfig() (Config, error) {
+	cfg := Config{ExpireDays: 14, Port: 8000}
+	file, err := os.ReadFile("./db/config.yaml")
+	if err != nil {
+		return cfg, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+	if err := yaml.Unmarshal(file, &cfg); err != nil {
+		return cfg, fmt.Errorf("配置文件格式错误: %w", err)
+	}
+	if cfg.Port < 1 || cfg.Port > 65535 {
+		return cfg, fmt.Errorf("配置端口必须在 1 到 65535 之间")
+	}
+	if cfg.JwtSecret == "" {
+		return cfg, fmt.Errorf("配置 jwt_secret 不能为空")
+	}
+	if cfg.ExpireDays < 1 || cfg.ExpireDays > 3650 {
+		return cfg, fmt.Errorf("配置 expire_days 必须在 1 到 3650 之间")
+	}
+	return cfg, nil
+}
+
 // 设置配置
-func SetConfig(newCfg Config) {
-	oldCfg := ReadConfig() // 读取旧的配置文件
+func SetConfig(newCfg Config) error {
+	oldCfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
 	// 覆盖新的字段
 	if newCfg.JwtSecret != "" {
 		oldCfg.JwtSecret = newCfg.JwtSecret
@@ -93,8 +111,20 @@ func SetConfig(newCfg Config) {
 	// 写入文件
 	data, err := yaml.Marshal(&oldCfg)
 	if err != nil {
-		log.Println(err)
+		return err
 	}
 	data = []byte(comment + string(data)) // 添加注释
-	os.WriteFile("./db/config.yaml", data, 0644)
+	file, err := os.CreateTemp("./db", ".config-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err = file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), "./db/config.yaml")
 }

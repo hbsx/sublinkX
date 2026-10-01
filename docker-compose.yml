@@ -1,14 +1,14 @@
 services:
   sublinkx:
-    image: ghcr.io/hbsx/sublinkx:latest
+    image: ${SUBLINK_IMAGE:-ghcr.io/hbsx/sublinkx:latest}
     pull_policy: always
     container_name: sublinkx
     ports:
-      - "8000:8000"
+      - "${SUBLINK_PORT:-8000}:8000"
     volumes:
-      - ./data/db:/app/db
-      - ./data/template:/app/template
-      - ./data/logs:/app/logs
+      - "${SUBLINK_DATA_DIR:-./data}/db:/app/db"
+      - "${SUBLINK_DATA_DIR:-./data}/template:/app/template"
+      - "${SUBLINK_DATA_DIR:-./data}/logs:/app/logs"
     environment:
       TZ: Asia/Shanghai
     restart: unless-stopped

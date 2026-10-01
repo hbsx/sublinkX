@@ -37,7 +37,13 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test ./...
+        run: |
+          bash -n install.sh
+          bash -n menu.sh
+          bash -n build.sh
+          docker compose config --quiet
+          go test ./...
+          go vet ./...
 
   build:
     needs: test

@@ -13,6 +13,7 @@ import (
 	"sublink/routers"
 	"sublink/settings"
 	"sublink/utils"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -66,10 +67,6 @@ func Templateinit() {
 }
 
 func main() {
-	// 初始化配置
-	models.ConfigInit()
-	config := models.ReadConfig() // 读取配置文件
-	var port = config.Port        // 读取端口号
 	// 获取版本号
 	var Isversion bool
 	version = "2.1.1"
@@ -77,6 +74,23 @@ func main() {
 	flag.Parse()
 	if Isversion {
 		fmt.Println(version)
+		return
+	}
+	config, err := initializeConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	port := config.Port
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		client := &http.Client{Timeout: 4 * time.Second}
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/api/v1/version", port))
+		if err != nil {
+			log.Fatal("健康检查失败: ", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			log.Fatalf("健康检查失败: HTTP %d", resp.StatusCode)
+		}
 		return
 	}
 	// 初始化数据库
@@ -93,24 +107,42 @@ func main() {
 	var username, password string
 	settingCmd.StringVar(&username, "username", "", "设置账号")
 	settingCmd.StringVar(&password, "password", "", "设置密码")
-	settingCmd.IntVar(&port, "port", 8000, "修改端口")
+	settingCmd.IntVar(&port, "port", port, "修改端口")
 	switch args[1] {
 	// 解析setting命令标志
 	case "setting":
 		settingCmd.Parse(args[2:])
-		fmt.Println(username, password)
-		settings.ResetUser(username, password)
+		if err := settings.ResetUser(username, password); err != nil {
+			log.Fatal(err)
+		}
 		return
 	case "run":
 		settingCmd.Parse(args[2:])
-		models.SetConfig(models.Config{
+		if port < 1 || port > 65535 {
+			log.Fatal("端口必须是 1 到 65535 之间的数字")
+		}
+		if err := models.SetConfig(models.Config{
 			Port: port,
-		}) // 设置端口
+		}); err != nil {
+			log.Fatal(err)
+		}
 		Run(port)
 	default:
-		return
+		log.Fatalf("未知命令: %s", args[1])
 
 	}
+}
+
+func initializeConfig() (models.Config, error) {
+	if err := models.ConfigInit(); err != nil {
+		return models.Config{}, err
+	}
+	config, err := models.LoadConfig()
+	if err != nil {
+		return models.Config{}, err
+	}
+	middlewares.Secret = []byte(config.JwtSecret)
+	return config, nil
 }
 
 func Run(port int) {
@@ -148,5 +180,7 @@ func Run(port int) {
 	routers.Templates(r)
 	routers.Version(r, version)
 	// 启动服务
-	r.Run(fmt.Sprintf("0.0.0.0:%d", port))
+	if err := r.Run(fmt.Sprintf("0.0.0.0:%d", port)); err != nil {
+		log.Fatal("服务启动失败: ", err)
+	}
 }

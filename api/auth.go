@@ -14,7 +14,11 @@ import (
 // 获取token
 func GetToken(username string) (string, error) {
 	// 过期时间天
-	ExpireDays := models.ReadConfig().ExpireDays
+	config, err := models.LoadConfig()
+	if err != nil {
+		return "", err
+	}
+	ExpireDays := config.ExpireDays
 	c := &middlewares.JwtClaims{
 		Username: username,
 		StandardClaims: jwt.StandardClaims{

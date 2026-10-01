@@ -92,6 +92,12 @@ docker compose up -d
 
 Compose 会拉取本仓库自动构建的 AMD64、ARMv7 或 ARM64 镜像。运行数据保存在仓库目录下的 `data/db`、`data/template` 和 `data/logs` 中。配置已启用 `restart: unless-stopped`，Docker 服务或服务器重启后会自动恢复容器。
 
+如需修改宿主机端口、固定镜像版本或使用已有数据，先复制 `.env.example` 为 `.env`。例如将 `SUBLINK_PORT=8080`，即可访问宿主机的 8080 端口，容器内的 `db/config.yaml` 仍保持 `port: 8000`。
+
+从旧版 Compose 或 Docker run 迁移时，先用 `docker inspect sublinkx --format '{{json .Mounts}}'` 确认旧数据位置并备份。在 `.env` 中将 `SUBLINK_DATA_DIR` 设置为原来的数据父目录（包含 `db`、`template`、`logs`），然后停止并删除旧容器、启动 Compose。不要在未确认数据目录前直接使用默认的 `./data`，否则会创建一个空数据库。
+
+如果曾主动执行 `docker stop` 或 `docker compose stop`，`unless-stopped` 会保留停止状态，需用 `docker start sublinkx` 或 `docker compose up -d` 恢复。健康检查显示 `unhealthy` 也不会自动触发 Docker 重启；请查看日志排查。
+
 查看状态和日志：
 
 ```bash
@@ -184,8 +190,8 @@ docker update --restart unless-stopped sublinkx
 
 ```bash
 cd ~/sublinkx
-docker rm -f sublinkx
 docker pull ghcr.io/hbsx/sublinkx:latest
+docker rm -f sublinkx
 docker run -d \
   --name sublinkx \
   --restart unless-stopped \
@@ -202,7 +208,9 @@ docker run -d \
 
 ```bash
 cd ~/sublinkx
+docker stop sublinkx
 tar -czf "sublinkx-backup-$(date +%F).tar.gz" db template
+docker start sublinkx
 ```
 
 ##### 7. 可选：清理无用镜像

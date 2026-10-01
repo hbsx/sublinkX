@@ -5,6 +5,7 @@
 db
 logs
 data
+.env
 README.md
 README.en-US.md
 docker-compose*.yml

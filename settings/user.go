@@ -1,35 +1,32 @@
 package settings
 
 import (
+	"fmt"
 	"log"
 	"sublink/models"
+
+	"gorm.io/gorm"
 )
 
 // 重置默认用户
-func ResetUser(username string, password string) {
+func ResetUser(username string, password string) error {
 	// 如果账号或者密码为空
 	if username == "" || password == "" {
-		log.Println("账号或者密码不能为空")
-		return
+		return fmt.Errorf("账号或者密码不能为空")
 	}
 	if len(password) < 6 {
-		log.Println("密码不能小于6位数")
-		return
+		return fmt.Errorf("密码不能小于6位数")
 	}
-	User := &models.User{}
-	// 获取所有用户
-	users, err := User.All()
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("1 = 1").Delete(&models.User{}).Error; err != nil {
+			return err
+		}
+		user := &models.User{Username: username, Password: password, Role: "admin", Nickname: "管理员"}
+		return tx.Create(user).Error
+	})
 	if err != nil {
-		log.Printf("用户存在")
+		return fmt.Errorf("重置账号失败: %w", err)
 	}
-	// 遍历所有用户
-	for _, user := range users {
-		// 删除所有用户
-		user.Del()
-	}
-
-	//打印输出
-	log.Printf("账号%s,密码%s", username, password)
-	User = &models.User{Username: username, Password: password, Role: "admin", Nickname: "管理员"}
-	User.Create()
+	log.Println("管理员账号已重置")
+	return nil
 }

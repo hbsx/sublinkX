@@ -14,7 +14,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 get_latest_release() {
-    curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" \
+    curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$REPOSITORY/releases/latest" \
         | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
         | head -n 1
 }
@@ -36,8 +36,8 @@ update_sublink() {
         return 1
     fi
 
-    current_version=$($BINARY --version 2>/dev/null || true)
-    if [ "$current_version" = "$latest_release" ]; then
+    current_version=$("$BINARY" --version 2>/dev/null || true)
+    if [ "${current_version#v}" = "${latest_release#v}" ]; then
         echo "当前已经是最新版本: $current_version"
         return 0
     fi
@@ -47,7 +47,7 @@ update_sublink() {
         return 1
     }
 
-    temporary_file=$(mktemp)
+    temporary_file=$(mktemp "$INSTALL_DIR/.sublink-update.XXXXXX") || return 1
     if ! curl -fL --retry 3 \
         "https://github.com/$REPOSITORY/releases/download/$latest_release/$asset_name" \
         -o "$temporary_file"; then
@@ -56,16 +56,18 @@ update_sublink() {
         return 1
     fi
 
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    if ! install -m 0755 "$temporary_file" "$BINARY"; then
+    if ! chmod 0755 "$temporary_file" || ! "$temporary_file" --version >/dev/null; then
         rm -f "$temporary_file"
-        systemctl start "$SERVICE_NAME" 2>/dev/null || true
-        echo "安装更新失败，已尝试恢复服务。" >&2
+        echo "下载的程序无法运行，已保留原服务。" >&2
         return 1
     fi
-    rm -f "$temporary_file"
+    if ! mv -f "$temporary_file" "$BINARY"; then
+        rm -f "$temporary_file"
+        echo "替换程序失败，已保留原服务。" >&2
+        return 1
+    fi
 
-    if systemctl start "$SERVICE_NAME"; then
+    if systemctl restart "$SERVICE_NAME" && systemctl is-active --quiet "$SERVICE_NAME"; then
         echo "更新完成: ${current_version:-未知版本} -> $latest_release"
     else
         echo "更新已安装，但服务启动失败。请运行 systemctl status $SERVICE_NAME 查看原因。" >&2
@@ -76,8 +78,8 @@ update_sublink() {
 change_port() {
     local port
 
-    read -r -p "请输入新的端口号: " port
-    if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    read -r -p "请输入新的端口号: " port || return 1
+    if ! [[ "$port" =~ ^[0-9]{1,5}$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
         echo "端口必须是 1 到 65535 之间的数字。" >&2
         return 1
     fi
@@ -87,26 +89,26 @@ change_port() {
         return 1
     fi
 
-    sed -i "s|^ExecStart=.*|ExecStart=$BINARY run --port $port|" "$SERVICE_FILE"
-    systemctl daemon-reload
-    systemctl restart "$SERVICE_NAME"
+    sed -i "s|^ExecStart=.*|ExecStart=$BINARY run --port $port|" "$SERVICE_FILE" || return 1
+    systemctl daemon-reload || return 1
+    systemctl restart "$SERVICE_NAME" || return 1
     echo "端口已修改为 $port，服务已重启。"
 }
 
 reset_credentials() {
     local username password
 
-    read -r -p "请输入新的账号: " username
-    read -r -s -p "请输入新的密码: " password
+    read -r -p "请输入新的账号: " username || return 1
+    read -r -s -p "请输入新的密码: " password || return 1
     echo
 
-    if [ -z "$username" ] || [ -z "$password" ]; then
-        echo "账号和密码不能为空。" >&2
+    if [ -z "$username" ] || [ "${#password}" -lt 6 ]; then
+        echo "账号不能为空，密码至少为 6 位。" >&2
         return 1
     fi
 
-    (cd "$INSTALL_DIR" && "$BINARY" setting --username "$username" --password "$password")
-    systemctl restart "$SERVICE_NAME"
+    (cd "$INSTALL_DIR" && "$BINARY" setting --username "$username" --password "$password") || return 1
+    systemctl restart "$SERVICE_NAME" || return 1
     echo "账号密码已重置，服务已重启。"
 }
 
@@ -115,9 +117,11 @@ uninstall_sublink() {
 
     systemctl disable --now "$SERVICE_NAME" 2>/dev/null || true
     rm -f "$SERVICE_FILE" "$BINARY" /usr/bin/sublink
+    rm -f /etc/systemd/system/sublink.service.d/restart.conf
+    rmdir /etc/systemd/system/sublink.service.d 2>/dev/null || true
     systemctl daemon-reload
 
-    read -r -p "是否删除数据库、模板和日志？此操作不可恢复 (y/N): " delete_data
+    read -r -p "是否删除数据库、模板和日志？此操作不可恢复 (y/N): " delete_data || return 1
     if [[ "$delete_data" =~ ^[Yy]$ ]]; then
         rm -rf "$INSTALL_DIR/db" "$INSTALL_DIR/template" "$INSTALL_DIR/logs"
     fi
@@ -126,9 +130,9 @@ uninstall_sublink() {
     echo "卸载完成。"
 }
 
+latest_release=$(get_latest_release 2>/dev/null || true)
 while true; do
-    latest_release=$(get_latest_release 2>/dev/null || true)
-    current_version=$($BINARY --version 2>/dev/null || echo "未安装")
+    current_version=$("$BINARY" --version 2>/dev/null || echo "未安装")
     service_status=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)
 
     echo "最新版本: ${latest_release:-获取失败}"
@@ -143,7 +147,7 @@ while true; do
     echo "7. 更新"
     echo "8. 重置账号密码"
     echo "0. 退出"
-    read -r -p "请选择一个选项: " option
+    read -r -p "请选择一个选项: " option || exit 0
 
     case "$option" in
         1)

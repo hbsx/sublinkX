@@ -90,6 +90,12 @@ docker compose up -d
 
 Compose pulls the matching AMD64, ARMv7, or ARM64 image built by this repository. Persistent data is stored in `data/db`, `data/template`, and `data/logs`. The configuration uses `restart: unless-stopped`, so the container starts again after Docker or the server restarts.
 
+Copy `.env.example` to `.env` to change the host port, pin an image version, or reuse existing data. `SUBLINK_PORT` changes only the host port; keep `port: 8000` in the container's `db/config.yaml`.
+
+Before migrating an existing container, inspect its mounts with `docker inspect sublinkx --format '{{json .Mounts}}'` and back up the data. Set `SUBLINK_DATA_DIR` in `.env` to the existing parent directory containing `db`, `template`, and `logs`. Stop and remove the old container before starting Compose. Using a different data directory starts a new, empty database.
+
+Containers stopped manually remain stopped under `unless-stopped`; start them explicitly to resume. An `unhealthy` status alone does not make Docker restart the container.
+
 To update a Compose deployment:
 
 ```bash

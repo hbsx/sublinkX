@@ -28,7 +28,7 @@ func InitSqlite() {
 	}
 	err = db.AutoMigrate(&User{}, &Subcription{}, &SubLogs{}, &GroupNode{}, &Node{})
 	if err != nil {
-		log.Println("数据表迁移失败")
+		log.Fatal("数据表迁移失败: ", err)
 	}
 	// 初始化用户数据
 	err = db.First(&User{}).Error
@@ -41,8 +41,10 @@ func InitSqlite() {
 		}
 		err = admin.Create()
 		if err != nil {
-			log.Println("初始化添加用户数据失败")
+			log.Fatal("初始化添加用户数据失败: ", err)
 		}
+	} else if err != nil {
+		log.Fatal("读取用户数据失败: ", err)
 	}
 	// 设置初始化标志为 true
 	isInitialized = true
