@@ -82,7 +82,26 @@ curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubuse
 
 ### Docker 方式
 
-#### 1. 准备环境
+#### Docker Compose（推荐）
+
+```bash
+git clone https://github.com/hbsx/sublinkX.git
+cd sublinkX
+docker compose up -d --build
+```
+
+运行数据保存在仓库目录下的 `data/db`、`data/template` 和 `data/logs` 中。Compose 已配置 `restart: unless-stopped`，Docker 服务或服务器重启后会自动恢复容器。
+
+查看状态和日志：
+
+```bash
+docker compose ps
+docker compose logs --tail=100 sublinkx
+```
+
+#### Docker run
+
+##### 1. 准备环境
 
 服务器需要提前安装 Docker，并确保 `8000` 端口未被其他程序占用：
 
@@ -90,7 +109,7 @@ curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubuse
 docker --version
 ```
 
-#### 2. 创建数据目录
+##### 2. 创建数据目录
 
 选择一个用于长期保存数据的位置，例如：
 
@@ -107,7 +126,7 @@ cd ~/sublinkx
 
 不需要手工创建上述文件。容器首次启动后，程序会自动生成数据库、配置文件和默认模板。
 
-#### 3. 构建镜像
+##### 3. 构建镜像
 
 直接从本仓库最新版源码构建：
 
@@ -115,7 +134,7 @@ cd ~/sublinkx
 docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
 ```
 
-#### 4. 创建并启动容器
+##### 4. 创建并启动容器
 
 在 `~/sublinkx` 目录中执行：
 
@@ -137,6 +156,12 @@ docker ps --filter name=sublinkx
 docker logs --tail=100 sublinkx
 ```
 
+如果容器是按旧版说明创建的，可以在不删除容器和数据的情况下补上自动重启策略：
+
+```bash
+docker update --restart unless-stopped sublinkx
+```
+
 浏览器访问：`http://服务器IP:8000`
 
 默认账号：`admin`  
@@ -144,7 +169,7 @@ docker logs --tail=100 sublinkx
 
 首次登录后请立即修改默认密码。
 
-#### 5. 更新版本
+##### 5. 更新版本
 
 数据已保存在宿主机的 `db`、`template` 和 `logs` 目录中，删除并重建容器不会丢失这些数据：
 
@@ -162,7 +187,7 @@ docker run -d \
   hbsx/sublinkx:latest
 ```
 
-#### 6. 备份数据
+##### 6. 备份数据
 
 建议在更新前备份数据库和模板：
 
@@ -171,7 +196,7 @@ cd ~/sublinkx
 tar -czf "sublinkx-backup-$(date +%F).tar.gz" db template
 ```
 
-#### 7. 可选：清理构建缓存
+##### 7. 可选：清理构建缓存
 
 如果构建成功后近期不再重新安装或更新，可以手动清理未使用的 Docker 构建缓存：
 

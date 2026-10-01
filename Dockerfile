@@ -1,21 +1,29 @@
-# Build stage
-FROM golang:1.22.2-alpine AS builder
-WORKDIR /app
-COPY . .
+# syntax=docker/dockerfile:1
+
+FROM golang:1.26-alpine3.24 AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -o sublinkX
 
-# Final stage
-FROM alpine:latest
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/sublinkX .
+
+FROM alpine:3.24
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && mkdir -p /app/db /app/logs /app/template
+
 WORKDIR /app
 
-# 设置时区为 Asia/Shanghai
 ENV TZ=Asia/Shanghai
 
-# 部分环境需要手动创建目录
-RUN mkdir -p /app/db /app/logs /app/template && chmod 777 /app/db /app/logs /app/template
+COPY --from=builder /out/sublinkX /app/sublinkX
 
-COPY --from=builder /app/sublinkX /app/sublinkX
 EXPOSE 8000
-CMD ["/app/sublinkX"]
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:8000/api/v1/version || exit 1
+
+ENTRYPOINT ["/app/sublinkX"]

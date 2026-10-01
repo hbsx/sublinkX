@@ -78,21 +78,38 @@ curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubuse
 
 Then just type in the install script
 
-### docker method:
+### Docker
 
-Create a directory where you want it to be located, such as mkdir sublinkx.
+Docker Compose is recommended:
 
-Then cd into the directory and enter the following command to mount the data.
-
-All you need to back up is the db and templates.
+```bash
+git clone https://github.com/hbsx/sublinkX.git
+cd sublinkX
+docker compose up -d --build
 ```
-docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
 
-docker run --name sublinkx -p 8000:8000 \
--v $PWD/db:/app/db \
--v $PWD/template:/app/template \
--v $PWD/logs:/app/logs \
--d hbsx/sublinkx:latest
+Persistent data is stored in `data/db`, `data/template`, and `data/logs`. The Compose configuration uses `restart: unless-stopped`, so the container starts again after Docker or the server restarts.
+
+To use `docker run` instead:
+
+```bash
+mkdir -p ~/sublinkx/db ~/sublinkx/template ~/sublinkx/logs
+cd ~/sublinkx
+docker build -t hbsx/sublinkx:latest https://github.com/hbsx/sublinkX.git
+docker run -d \
+  --name sublinkx \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -v "$PWD/db:/app/db" \
+  -v "$PWD/template:/app/template" \
+  -v "$PWD/logs:/app/logs" \
+  hbsx/sublinkx:latest
+```
+
+For a container created with the older instructions, add the restart policy without recreating it:
+
+```bash
+docker update --restart unless-stopped sublinkx
 ```
 
 To support the development of my project, I plan to apply for a free VPS offered by ZMTO. My project currently involves Docker image support for multiple My project currently involves Docker image support for multiple architectures (arm64 and amd64), as well as automation for building and pushing. Therefore, I am requesting a 4-core, 8GB RAM Ubuntu VPS with root access.
