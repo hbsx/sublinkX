@@ -103,7 +103,6 @@ func DecodeTrojanURL(s string) (Trojan, error) {
 	hostname := u.Hostname()
 	port, _ := strconv.Atoi(u.Port())
 	peer := u.Query().Get("peer")
-	allowInsecure := u.Query().Get("allowInsecure")
 	sni := u.Query().Get("sni")
 	types := u.Query().Get("type")
 	path := u.Query().Get("path")
@@ -120,23 +119,6 @@ func DecodeTrojanURL(s string) (Trojan, error) {
 	// 如果没有设置name,则使用hostname:port
 	if name == "" {
 		name = hostname + ":" + u.Port()
-	}
-	if CheckEnvironment() {
-		fmt.Println("password:", password)
-		fmt.Println("password:", u.User.Username())
-		fmt.Println("hostname:", hostname)
-		fmt.Println("port:", port)
-		fmt.Println("peer:", peer)
-		fmt.Println("allowInsecure:", allowInsecure)
-		fmt.Println("sni:", sni)
-		fmt.Println("type:", types)
-		fmt.Println("path:", path)
-		fmt.Println("security:", security)
-		fmt.Println("fp:", fp)
-		fmt.Println("alpn:", alpn)
-		fmt.Println("host:", host)
-		fmt.Println("flow:", flow)
-		fmt.Println("name:", name)
 	}
 	return Trojan{
 		Password: password,

@@ -20,19 +20,19 @@ type Temp struct {
 
 var baseTemplateDir string
 
-func init() {
+func InitTemplateDir() error {
 	// === 修改点开始 ===
 	// 获取当前工作目录 (Current Working Directory)
 	// 当您在项目根目录运行 `go run main.go` 时，这将是项目根目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("无法获取当前工作目录: %v", err)
+		return err
 	}
 
 	// 将 "template" 路径解析为相对于当前工作目录的绝对路径
 	absPath, err := filepath.Abs(filepath.Join(cwd, "template"))
 	if err != nil {
-		log.Fatalf("无法解析 template 目录的绝对路径: %v", err)
+		return err
 	}
 	baseTemplateDir = absPath
 	log.Printf("基础模板目录已初始化为: %s (基于当前工作目录)", baseTemplateDir)
@@ -41,10 +41,11 @@ func init() {
 	// 确保基础模板目录存在，如果不存在则创建
 	if _, err := os.Stat(baseTemplateDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(baseTemplateDir, 0755); err != nil {
-			log.Fatalf("无法创建基础模板目录 %s: %v", baseTemplateDir, err)
+			return err
 		}
 		log.Printf("已创建基础模板目录: %s", baseTemplateDir)
 	}
+	return nil
 }
 
 // safeFilename 生成安全的文件路径，防止目录遍历

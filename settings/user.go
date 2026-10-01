@@ -17,11 +17,14 @@ func ResetUser(username string, password string) error {
 	if len(password) < 6 {
 		return fmt.Errorf("密码不能小于6位数")
 	}
+	user := &models.User{Username: username, Password: password, Role: "admin", Nickname: "管理员"}
+	if err := models.PrepareCredentials(user); err != nil {
+		return err
+	}
 	err := models.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("1 = 1").Delete(&models.User{}).Error; err != nil {
 			return err
 		}
-		user := &models.User{Username: username, Password: password, Role: "admin", Nickname: "管理员"}
 		return tx.Create(user).Error
 	})
 	if err != nil {

@@ -4,10 +4,10 @@ import {getSubs,AddSub,DelSub,UpdateSub} from "@/api/subcription/subs"
 import {getTemp} from "@/api/subcription/temp"
 import {getNodes} from "@/api/subcription/node"
 import QrcodeVue from 'qrcode.vue'
-import md5 from 'md5'
 import { VueDraggable } from 'vue-draggable-plus'
 
 interface Sub {
+  Token: string;
   ID: number;
   Name: string;
   CreateDate: string;
@@ -269,12 +269,12 @@ const ClientDiaLog = ref(false)
 const ClientList = ['v2ray','clash','surge'] // 客户端列表
 const ClientUrls = ref<Record<string, string>>({})
 const ClientUrl = ref('')
-const handleClient = (name:string) => {
+const handleClient = (subscription:Sub) => {
   let serverAddress = location.protocol + '//' + location.hostname + (location.port ? ':' + location.port : '');
   ClientDiaLog.value = true
-  ClientUrl.value = `${serverAddress}/c/?token=${md5(name)}`
+  ClientUrl.value = `${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}`
   ClientList.forEach((item:string) => {
-    ClientUrls.value[item]=`${serverAddress}/c/?token=${md5(name)}`
+    ClientUrls.value[item]=`${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}`
   })
 }
 
@@ -431,7 +431,7 @@ const toggleSelect = (name: string) => {
     <el-table-column prop="Link" label="链接" :show-overflow-tooltip="true" >
       <template #default="{row}">
         <div v-if="row.Nodes">
-          <el-link type="primary" size="small" @click="handleClient(row.Name)">客户端</el-link>
+          <el-link type="primary" size="small" @click="handleClient(row)">客户端</el-link>
         </div>
         </template>
       </el-table-column>

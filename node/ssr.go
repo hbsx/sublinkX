@@ -72,7 +72,7 @@ func DecodeSSRURL(s string) (Ssr, error) {
 			for _, param := range params {
 				parts := strings.SplitN(param, "=", 2)
 				if len(parts) != 2 {
-					fmt.Println("Invalid parameter: ", param)
+					fmt.Println("Invalid SSR parameter")
 					continue
 				}
 				paramMap[parts[0]] = parts[1]
@@ -83,12 +83,6 @@ func DecodeSSRURL(s string) (Ssr, error) {
 		}
 		remarks = Base64Decode(paramMap["remarks"])
 		obfsparam = Base64Decode(paramMap["obfsparam"])
-		defer func() {
-			if CheckEnvironment() {
-				fmt.Println("remarks", remarks)
-				fmt.Println("obfsparam", obfsparam)
-			}
-		}()
 	}
 	// 反着解析参数 怕有ipv6地址冒号混淆
 	param := strings.Split(s, ":")
@@ -104,14 +98,6 @@ func DecodeSSRURL(s string) (Ssr, error) {
 	// 如果没有备注默认使用服务器+端口作为备注
 	if remarks == "" {
 		remarks = server + ":" + strconv.Itoa(port)
-	}
-	if CheckEnvironment() {
-		fmt.Println("password", password)
-		fmt.Println("obfs", obfs)
-		fmt.Println("method", method)
-		fmt.Println("protocol", protocol)
-		fmt.Println("port", port)
-		fmt.Println("server", server)
 	}
 	return Ssr{
 		Server:   server,

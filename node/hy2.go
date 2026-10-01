@@ -98,20 +98,6 @@ func DecodeHY2URL(s string) (HY2, error) {
 	if name == "" {
 		name = server + ":" + u.Port()
 	}
-	if CheckEnvironment() {
-		fmt.Println("password:", password)
-		fmt.Println("server:", server)
-		fmt.Println("port:", port)
-		fmt.Println("insecure:", insecure)
-		fmt.Println("auth:", auth)
-		fmt.Println("upMbps:", upMbps)
-		fmt.Println("downMbps:", downMbps)
-		fmt.Println("alpn:", alpn)
-		fmt.Println("sni:", sni)
-		fmt.Println("obfs:", obfs)
-		fmt.Println("obfsPassword:", obfsPassword)
-		fmt.Println("name:", name)
-	}
 	return HY2{
 		Password:     password,
 		Host:         server,

@@ -18,7 +18,7 @@ func DocodeNodeName(nd *models.Node) (models.Node, error) { // 解码节点名�
 	if nd.Name == "" {
 		u, err := url.Parse(nd.Link)
 		if err != nil {
-			log.Println(err)
+			log.Println("节点解析失败")
 			return *nd, err
 		}
 		switch {
@@ -37,28 +37,28 @@ func DocodeNodeName(nd *models.Node) (models.Node, error) { // 解码节点名�
 		case u.Scheme == "ss":
 			ss, err := node.DecodeSSURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = ss.Name
 		case u.Scheme == "ssr":
 			ssr, err := node.DecodeSSRURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = ssr.Qurey.Remarks
 		case u.Scheme == "trojan":
 			trojan, err := node.DecodeTrojanURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = trojan.Name
 		case u.Scheme == "vmess":
 			vmess, err := node.DecodeVMESSURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = vmess.Ps
@@ -66,28 +66,28 @@ func DocodeNodeName(nd *models.Node) (models.Node, error) { // 解码节点名�
 		case u.Scheme == "vless":
 			vless, err := node.DecodeVLESSURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = vless.Name
 		case u.Scheme == "hy" || u.Scheme == "hysteria":
 			hy, err := node.DecodeHYURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = hy.Name
 		case u.Scheme == "hy2" || u.Scheme == "hysteria2":
 			hy2, err := node.DecodeHY2URL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = hy2.Name
 		case u.Scheme == "tuic":
 			tuic, err := node.DecodeTuicURL(nd.Link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点解析失败")
 				return *nd, err
 			}
 			nd.Name = tuic.Name
@@ -99,6 +99,11 @@ func NodeUpdadte(c *gin.Context) {
 	// var node models.Node
 	NewName := c.PostForm("name")
 	Newlink := c.PostForm("link")
+	sourceType := c.PostForm("source_type")
+	if sourceType != "" && sourceType != "auto" && sourceType != "proxy" && sourceType != "subscription" {
+		c.JSON(400, gin.H{"msg": "链接类型无效"})
+		return
+	}
 	id := c.PostForm("id")
 	group := c.PostForm("group")        // 分组
 	groups := strings.Split(group, ",") // 分组列表
@@ -120,8 +125,9 @@ func NodeUpdadte(c *gin.Context) {
 		ID: index,
 	}
 	NewNode := &models.Node{
-		Name: NewName,
-		Link: Newlink,
+		Name:       NewName,
+		Link:       Newlink,
+		SourceType: sourceType,
 	}
 	var gns []models.GroupNode
 	if groups != nil || len(groups) > 0 {
@@ -258,11 +264,17 @@ func GroupNodeSet(c *gin.Context) {
 func NodeAdd(c *gin.Context) {
 	var n models.Node
 	link := c.PostForm("link")
+	sourceType := c.PostForm("source_type")
+	if sourceType != "" && sourceType != "auto" && sourceType != "proxy" && sourceType != "subscription" {
+		c.JSON(400, gin.H{"msg": "链接类型无效"})
+		return
+	}
 	name := c.PostForm("name")
 	group := c.PostForm("group")
 	n = models.Node{
-		Name: name,
-		Link: link,
+		Name:       name,
+		Link:       link,
+		SourceType: sourceType,
 	}
 	if link == "" && !strings.Contains(link, "://") {
 		c.JSON(400, gin.H{
@@ -273,7 +285,7 @@ func NodeAdd(c *gin.Context) {
 	// 解码节点名称
 	n, err := DocodeNodeName(&n)
 	if err != nil {
-		log.Println("解码节点名称错误:", err)
+		log.Println("解码节点名称错误")
 		c.JSON(400, gin.H{
 			"msg": "解码节点名称错误",
 		})
@@ -299,7 +311,7 @@ func NodeAdd(c *gin.Context) {
 				err = gn.Add()
 				if err != nil {
 					// 分组不存在
-					log.Println(err)
+					log.Println("节点解析失败")
 					c.JSON(400, gin.H{
 						"msg": err,
 					})

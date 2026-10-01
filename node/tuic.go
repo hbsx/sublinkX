@@ -50,18 +50,6 @@ func DecodeTuicURL(s string) (Tuic, error) {
 	if name == "" {
 		name = server + ":" + u.Port()
 	}
-	if CheckEnvironment() {
-		fmt.Println("password:", password)
-		fmt.Println("server:", server)
-		fmt.Println("port:", port)
-		fmt.Println("insecure:", Congestioncontrol)
-		fmt.Println("uuid:", uuid)
-		fmt.Println("Udprelay_mode:", Udprelay_mode)
-		fmt.Println("alpn:", alpn)
-		fmt.Println("sni:", sni)
-		fmt.Println("Disablesni:", Disablesni)
-		fmt.Println("name:", name)
-	}
 	return Tuic{
 		Name:               name,
 		Password:           password,

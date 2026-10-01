@@ -67,13 +67,21 @@
 
 
 
+## 2.1.2 升级说明
+
+升级后请重新登录，并在后台重新复制订阅链接；旧的 MD5 链接停止使用。数据库自动迁移，节点、订阅名称、模板和随机凭据会持久保存。
+
+HTTP/HTTPS 链接可选择“代理节点”或“远程订阅”。自动识别将带账号密码、名称片段或仅带端口的链接视为代理；普通网页路径视为订阅。无认证、无名称且使用默认端口的代理请选择“代理节点”，有歧义的订阅请选择“远程订阅”。
+
+Linux 安装/更新校验 SHA256SUMS，停止服务后备份数据库和模板，再替换程序并验证。如果启动失败，自动恢复原程序、配置和数据库。旧版本日志中可能仍有敏感信息，本版本不删除历史日志。
+
 ## [安装说明]
 
 当前分支的最新版本包含 AnyTLS、SOCKS5、HTTP/HTTPS、VLESS XHTTP 支持，并已移除登录验证码。
 
 ### linux方式：
 ```
-curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/hbsx/sublinkX/main/install.sh | sudo bash
+curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/hbsx/sublinkX/main/install.sh | sudo bash
 ```
 
 ```sublink``` 呼出菜单

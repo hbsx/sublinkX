@@ -1,13 +1,12 @@
 package node
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
-	"regexp"
 	"strings"
+	"sublink/utils"
 )
 
 func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
@@ -18,7 +17,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "ss":
 			ss, err := DecodeSSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			proxy := map[string]interface{}{
@@ -36,7 +35,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "vmess":
 			vmess, err := DecodeVMESSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			tls := false
@@ -72,7 +71,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "trojan":
 			trojan, err := DecodeTrojanURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			proxy := map[string]interface{}{
@@ -94,7 +93,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "hysteria2" || Scheme == "hy2":
 			hy2, err := DecodeHY2URL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			proxy := map[string]interface{}{
@@ -116,7 +115,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "tuic":
 			tuic, err := DecodeTuicURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			proxy := map[string]interface{}{
@@ -139,45 +138,43 @@ func DecodeSurge(proxys, groups []string, file string) (string, error) {
 	var surge []byte
 	var err error
 	if strings.Contains(file, "://") {
-		resp, err := http.Get(file)
+		surge, err = utils.Fetch(context.Background(), file, 2<<20)
 		if err != nil {
-			log.Println("http.Get error", err)
-			return "", err
-		}
-		defer resp.Body.Close()
-		surge, err = io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("error: %v", err)
 			return "", err
 		}
 	} else {
 		surge, err = os.ReadFile(file)
 		if err != nil {
-			log.Println(err)
+			log.Println("节点或模板解析失败")
 			return "", err
 		}
 	}
 
-	proxyReg := regexp.MustCompile(`(?s)\[Proxy\](.*?)\[*]`)
-	groupReg := regexp.MustCompile(`(?s)\[Proxy Group\](.*?)\[*]`)
-
-	proxyPart := proxyReg.ReplaceAllStringFunc(string(surge), func(s string) string {
-
-		text := strings.Join(proxys, "\n")
-		return "[Proxy]\n" + text + s[len("[Proxy]"):]
-	})
-	groupPart := groupReg.ReplaceAllStringFunc(proxyPart, func(s string) string {
-		lines := strings.Split(s, "\n")
-		grouplist := strings.Join(groups, ",")
-		for i, line := range lines {
-
-			if strings.Contains(line, "=") {
-				lines[i] = strings.TrimSpace(line) + ", " + grouplist
-				// lines[i] = line + "," + grouplist
+	lines := strings.Split(strings.ReplaceAll(string(surge), "\r\n", "\n"), "\n")
+	var output []string
+	section := ""
+	foundProxy, foundGroup := false, false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			section = trimmed
+			output = append(output, line)
+			if section == "[Proxy]" {
+				foundProxy = true
+				output = append(output, proxys...)
 			}
+			if section == "[Proxy Group]" {
+				foundGroup = true
+			}
+			continue
 		}
-		return strings.Join(lines, "\n") + s[len("[Proxy Group]"):]
-	})
-
-	return groupPart, nil
+		if section == "[Proxy Group]" && strings.Contains(line, "=") && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, ";") && len(groups) > 0 {
+			line = strings.TrimRight(line, " \t") + ", " + strings.Join(groups, ",")
+		}
+		output = append(output, line)
+	}
+	if !foundProxy || !foundGroup {
+		return "", fmt.Errorf("Surge 模板缺少 Proxy 或 Proxy Group 段")
+	}
+	return strings.Join(output, "\n"), nil
 }

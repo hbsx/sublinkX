@@ -2,7 +2,6 @@ package models
 
 import (
 	// 用于将配置解析为结构体
-	"log"
 	"strings" // 用于处理逗号分隔的字符串
 
 	"gorm.io/gorm"
@@ -13,6 +12,7 @@ type Subcription struct {
 	gorm.Model
 	ID        int
 	Name      string
+	Token     string    `gorm:"uniqueIndex"`
 	Config    string    `gorm:"type:text"` // Config 存储为 JSON 字符串
 	NodeOrder string    `gorm:"type:text"`
 	Nodes     []Node    `gorm:"many2many:subcription_nodes;"`
@@ -30,6 +30,11 @@ type SubscriptionConfig struct { // <--- 这里重命名了
 
 // Add 添加订阅
 func (sub *Subcription) Add() error {
+	var err error
+	sub.Token, err = RandomToken()
+	if err != nil {
+		return err
+	}
 	// 在创建订阅时，如果 sub.Nodes 已经被前端填充并排序，可以将其名称转换为 NodeOrder 字符串
 	if len(sub.Nodes) > 0 {
 		names := make([]string, len(sub.Nodes))
@@ -79,7 +84,6 @@ func (sub *Subcription) Update(NewName *Subcription) error {
 
 	// 更新多对多关系: Replace 会清除旧关联并建立新关联
 	// 确保 sub.Nodes 包含了新的排序后的节点对象
-	log.Println("Updating subscription nodes:", NewName.SubLogs)
 	return DB.Model(&existingSub).Association("Nodes").Replace(NewName.Nodes)
 }
 
@@ -94,7 +98,6 @@ func (sub *Subcription) Find() error {
 		orderedNames := strings.Split(sub.NodeOrder, ",")
 		nodeMap := make(map[string]Node)
 		for _, node := range sub.Nodes {
-			log.Println("node:", node)
 			nodeMap[node.Name] = node
 		}
 
@@ -157,4 +160,24 @@ func (sub *Subcription) Del() error {
 	// 但为了确保，你也可以显式删除 SubLogs:
 	// DB.Where("subcription_id = ?", sub.ID).Delete(&SubLogs{})
 	return DB.Delete(sub).Error
+}
+
+func (sub *Subcription) FindByToken(token string) error {
+	if err := DB.Preload("Nodes").Where("token = ?", token).First(sub).Error; err != nil {
+		return err
+	}
+	if sub.NodeOrder != "" {
+		byName := make(map[string]Node)
+		for _, entry := range sub.Nodes {
+			byName[entry.Name] = entry
+		}
+		var ordered []Node
+		for _, name := range strings.Split(sub.NodeOrder, ",") {
+			if entry, ok := byName[strings.TrimSpace(name)]; ok {
+				ordered = append(ordered, entry)
+			}
+		}
+		sub.Nodes = ordered
+	}
+	return nil
 }

@@ -1,12 +1,12 @@
 package middlewares
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"sublink/models"
+	"sublink/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,16 +16,18 @@ import (
 func GetIp(c *gin.Context) {
 	c.Next()
 	func() {
-		subname, _ := c.Get("subname")
-
+		subname, valid := c.Get("subname")
+		if !valid || c.Writer.Status() != 200 {
+			return
+		}
 		ip := c.ClientIP()
-		resp, err := http.Get(fmt.Sprintf("https://whois.pconline.com.cn/ipJson.jsp?ip=%s&json=true", ip))
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+		body, err := utils.Fetch(ctx, fmt.Sprintf("https://whois.pconline.com.cn/ipJson.jsp?ip=%s&json=true", ip), 64<<10)
 		if err != nil {
 			log.Println("获取IP信息失败:", err)
 			return
 		}
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
 		utf8Body, _ := simplifiedchinese.GBK.NewDecoder().Bytes(body)
 		type IpInfo struct {
 			Addr string `json:"addr"`

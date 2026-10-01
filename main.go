@@ -2,12 +2,16 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"sublink/api"
 	"sublink/middlewares"
 	"sublink/models"
 	"sublink/routers"
@@ -69,11 +73,21 @@ func Templateinit() {
 func main() {
 	// 获取版本号
 	var Isversion bool
-	version = "2.1.1"
+	version = "2.1.2"
 	flag.BoolVar(&Isversion, "version", false, "显示版本号")
 	flag.Parse()
 	if Isversion {
 		fmt.Println(version)
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		config, err := models.LoadConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := healthcheck(config.Port); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	config, err := initializeConfig()
@@ -81,18 +95,6 @@ func main() {
 		log.Fatal(err)
 	}
 	port := config.Port
-	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
-		client := &http.Client{Timeout: 4 * time.Second}
-		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/api/v1/version", port))
-		if err != nil {
-			log.Fatal("健康检查失败: ", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			log.Fatalf("健康检查失败: HTTP %d", resp.StatusCode)
-		}
-		return
-	}
 	// 初始化数据库
 	models.InitSqlite()
 	// 获取命令行参数
@@ -107,17 +109,25 @@ func main() {
 	var username, password string
 	settingCmd.StringVar(&username, "username", "", "设置账号")
 	settingCmd.StringVar(&password, "password", "", "设置密码")
-	settingCmd.IntVar(&port, "port", port, "修改端口")
+	portText := settingCmd.String("port", fmt.Sprint(port), "修改端口")
 	switch args[1] {
 	// 解析setting命令标志
 	case "setting":
 		settingCmd.Parse(args[2:])
+		port, err = parsePort(*portText)
+		if err != nil {
+			log.Fatal(err)
+		}
 		if err := settings.ResetUser(username, password); err != nil {
 			log.Fatal(err)
 		}
 		return
 	case "run":
 		settingCmd.Parse(args[2:])
+		port, err = parsePort(*portText)
+		if err != nil {
+			log.Fatal(err)
+		}
 		if port < 1 || port > 65535 {
 			log.Fatal("端口必须是 1 到 65535 之间的数字")
 		}
@@ -147,11 +157,17 @@ func initializeConfig() (models.Config, error) {
 
 func Run(port int) {
 	// 初始化gin框架
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
+		return fmt.Sprintf("%s %d %s %s %s\n", p.TimeStamp.Format(time.RFC3339), p.StatusCode, p.Method, strings.SplitN(p.Path, "?", 2)[0], p.Latency)
+	}), gin.Recovery())
 	// 初始化日志配置
 	utils.Loginit()
 	// 初始化模板
 	Templateinit()
+	if err := api.InitTemplateDir(); err != nil {
+		log.Fatal("模板目录初始化失败: ", err)
+	}
 	// 安装中间件
 	r.Use(middlewares.AuthorToken) // jwt验证token
 	// 设置静态资源路径
@@ -183,4 +199,28 @@ func Run(port int) {
 	if err := r.Run(fmt.Sprintf("0.0.0.0:%d", port)); err != nil {
 		log.Fatal("服务启动失败: ", err)
 	}
+}
+
+func parsePort(text string) (int, error) {
+	port, err := strconv.Atoi(text)
+	if err != nil || port < 1 || port > 65535 {
+		return 0, fmt.Errorf("端口必须是 1 到 65535 之间的数字")
+	}
+	return port, nil
+}
+func healthcheck(port int) error {
+	client := &http.Client{Timeout: 4 * time.Second}
+	response, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/api/v1/version", port))
+	if err != nil {
+		return fmt.Errorf("健康检查失败")
+	}
+	defer response.Body.Close()
+	var result struct {
+		Code string
+		Data string
+	}
+	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&result) != nil || result.Code != "00000" || result.Data != version {
+		return fmt.Errorf("健康检查失败：服务版本不匹配")
+	}
+	return nil
 }

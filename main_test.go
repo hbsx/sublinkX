@@ -37,6 +37,9 @@ func TestFirstStartAndRestartKeepLoginTokenValid(t *testing.T) {
 	if len(first.JwtSecret) != 64 {
 		t.Fatal("fresh installations must generate a 32-byte random secret")
 	}
+	models.InitSqlite()
+	sqlDB, _ := models.DB.DB()
+	t.Cleanup(func() { sqlDB.Close(); models.DB = nil })
 	token, err := api.GetToken("admin")
 	if err != nil {
 		t.Fatal(err)

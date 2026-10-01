@@ -77,17 +77,5 @@ func DecodeVMESSURL(s string) (Vmess, error) {
 	if vmess.Ps == "" {
 		vmess.Ps = vmess.Add + ":" + vmess.Port.(string)
 	}
-	if CheckEnvironment() {
-		fmt.Println("服务器地址", vmess.Add)
-		fmt.Println("端口", vmess.Port)
-		fmt.Println("path", vmess.Path)
-		fmt.Println("uuid", vmess.Id)
-		fmt.Println("alterId", vmess.Aid)
-		fmt.Println("cipher", vmess.Scy)
-		fmt.Println("client-fingerprint", vmess.Fp)
-		fmt.Println("network", vmess.Net)
-		fmt.Println("tls", vmess.Tls)
-		fmt.Println("备注", vmess.Ps)
-	}
 	return vmess, nil
 }

@@ -98,7 +98,6 @@ func UserPages(c *gin.Context) {
 func UserSet(c *gin.Context) {
 	NewUsername := c.PostForm("username")
 	NewPassword := c.PostForm("password")
-	log.Println(NewUsername, NewPassword)
 	if NewUsername == "" || NewPassword == "" {
 		c.JSON(400, gin.H{
 			"code": "00001",
@@ -115,8 +114,8 @@ func UserSet(c *gin.Context) {
 	if err != nil {
 		log.Println(err)
 		c.JSON(400, gin.H{
-			"code": "00000",
-			"msg":  err,
+			"code": "00001",
+			"msg":  "修改失败，请检查账号和密码长度",
 		})
 		return
 	}

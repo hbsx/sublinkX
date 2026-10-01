@@ -1,13 +1,13 @@
 package node
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sublink/utils"
 
 	"gopkg.in/yaml.v3"
 )
@@ -98,7 +98,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "anytls":
 			anytls, err := DecodeAnyTLSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			if anytls.Name == "" {
@@ -119,7 +119,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "socks" || Scheme == "socks5" || Scheme == "http" || Scheme == "https":
 			standard, err := DecodeStandardProxyURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			if standard.Name == "" {
@@ -143,7 +143,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "ss":
 			ss, err := DecodeSSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -164,7 +164,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "ssr":
 			ssr, err := DecodeSSRURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if ssr.Qurey.Remarks == "" {
@@ -187,7 +187,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "trojan":
 			trojan, err := DecodeTrojanURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -220,7 +220,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "vmess":
 			vmess, err := DecodeVMESSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -258,7 +258,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "vless":
 			vless, err := DecodeVLESSURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -324,7 +324,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "hy" || Scheme == "hysteria":
 			hy, err := DecodeHYURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -348,7 +348,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "hy2" || Scheme == "hysteria2":
 			hy2, err := DecodeHY2URL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -373,7 +373,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "tuic":
 			tuic, err := DecodeTuicURL(link)
 			if err != nil {
-				log.Println(err)
+				log.Println("节点或模板解析失败")
 				continue
 			}
 			// 如果没有名字，就用服务器地址作为名字
@@ -412,15 +412,8 @@ func DecodeClash(proxys []Proxy, yamlfile string) ([]byte, error) {
 	var data []byte
 	var err error
 	if strings.Contains(yamlfile, "://") {
-		resp, err := http.Get(yamlfile)
+		data, err = utils.Fetch(context.Background(), yamlfile, 2<<20)
 		if err != nil {
-			log.Println("http.Get error", err)
-			return nil, err
-		}
-		defer resp.Body.Close()
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("error: %v", err)
 			return nil, err
 		}
 	} else {
@@ -455,11 +448,14 @@ func DecodeClash(proxys []Proxy, yamlfile string) ([]byte, error) {
 	config["proxies"] = proxies
 	// 往ProxyGroup中插入代理列表
 	// ProxiesNameList := []string{"newProxy", "ceshi"}
-	proxyGroups := config["proxy-groups"].([]interface{})
+	proxyGroups, ok := config["proxy-groups"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Clash 模板 proxy-groups 必须是数组")
+	}
 	for i, pg := range proxyGroups {
 		proxyGroup, ok := pg.(map[string]interface{})
 		if !ok {
-			continue
+			return nil, fmt.Errorf("Clash 策略组必须是对象")
 		}
 		// 如果 proxyGroup["proxies"] 是 nil，初始化它为一个空的切片
 		if proxyGroup["proxies"] == nil {
@@ -468,11 +464,15 @@ func DecodeClash(proxys []Proxy, yamlfile string) ([]byte, error) {
 		// 如果为链式代理的话则不插入返回
 		// log.Print("代理类型为:", proxyGroup["type"])
 		if proxyGroup["type"] == "relay" {
-			break
+			continue
 		}
 		// 清除 nil 值
 		var validProxies []interface{}
-		for _, p := range proxyGroup["proxies"].([]interface{}) {
+		groupProxies, ok := proxyGroup["proxies"].([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("Clash 策略组 proxies 必须是数组")
+		}
+		for _, p := range groupProxies {
 			if p != nil {
 				validProxies = append(validProxies, p)
 			}

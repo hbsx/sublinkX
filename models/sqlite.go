@@ -3,9 +3,11 @@ package models
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -16,7 +18,11 @@ func InitSqlite() {
 		log.Fatal("创建数据库目录失败: ", err)
 	}
 	// 连接数据库
-	db, err := gorm.Open(sqlite.Open("./db/sublink.db"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("./db/sublink.db"), &gorm.Config{Logger: logger.New(
+		log.New(os.Stderr, "", log.LstdFlags), logger.Config{
+			SlowThreshold: time.Second, LogLevel: logger.Warn,
+			IgnoreRecordNotFoundError: true, ParameterizedQueries: true,
+		})})
 	if err != nil {
 		log.Fatal("连接数据库失败: ", err)
 	}
@@ -29,6 +35,9 @@ func InitSqlite() {
 	err = db.AutoMigrate(&User{}, &Subcription{}, &SubLogs{}, &GroupNode{}, &Node{})
 	if err != nil {
 		log.Fatal("数据表迁移失败: ", err)
+	}
+	if err := MigrateSecurity(db); err != nil {
+		log.Fatal("安全配置迁移失败: ", err)
 	}
 	// 初始化用户数据
 	err = db.First(&User{}).Error

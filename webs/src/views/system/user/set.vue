@@ -41,8 +41,8 @@ function resetPassword(row: { [key: string]: any }) {
       
       }
        ).then(() => {
-      ElMessage.success(t('userset.message.xx4') + password.value);
-      window.location.reload();
+      ElMessage.success(t('userset.message.xx4'));
+      userStore.resetToken().then(() => window.location.reload());
     });
     })
 }

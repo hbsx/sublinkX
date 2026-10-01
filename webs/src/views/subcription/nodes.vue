@@ -12,6 +12,7 @@ interface Node {
   ID: number;
   Name: string;
   Link: string;
+  SourceType?: string;
   CreateDate: string;
   GroupNodes?: GroupNode[]; // 分组信息
   
@@ -21,6 +22,7 @@ interface NodeInfo {
     Title?:string 
     Name?: string
     Link: string
+    SourceType?: string
     GroupName?: string[] // 分组名称
 }
 onMounted(async() => {  // 页面开始执行函数
@@ -50,6 +52,7 @@ const NodeForm = ref<NodeInfo>({
     Title: '',
     Name: '',
     Link: '',
+    SourceType: 'auto',
     GroupName: [],
   })
 const allGroupNames = ref<string[]>([]); // 所有分组名称
@@ -67,6 +70,7 @@ function ClearInput() {
     Title: '',
     Name: '',
     Link: '',
+    SourceType: 'auto',
     GroupName: [],
   }
   NodeGroupInput.value = ''; // 清空创建分组输入框
@@ -104,6 +108,7 @@ const handleAddNode = () => {
     Title: '添加节点',
     Name: '',
     Link: '',
+    SourceType: 'auto',
     GroupName: [],
   };
   SelectionNodeGroups.value = [];
@@ -120,6 +125,7 @@ const handleEditNode = (row: Node) => {
     Title: '编辑节点',
     Name: row.Name,
     Link: row.Link,
+    SourceType: row.SourceType || 'auto',
     GroupName: (row.GroupNodes || []).map(g => g.Name),
   };
   SelectionNodeGroups.value = NodeForm.value.GroupName || [];
@@ -138,6 +144,7 @@ const SubmitNodeForm = async (row:any) => {
       for (const link of links) {
         await AddNodes({
           link,
+          source_type: NodeForm.value.SourceType,
           group: RadioGroup.value === '1' ? SelectionNodeGroups.value.join(',') : NodeGroupInput.value,
         });
       }
@@ -147,6 +154,7 @@ const SubmitNodeForm = async (row:any) => {
         id:NodeForm.value.ID,
         name: NodeForm.value.Name, // 新名称
         link: NodeForm.value.Link, // 新链接
+        source_type: NodeForm.value.SourceType,
         group: RadioGroup.value === '1' ? SelectionNodeGroups.value.join(',') : NodeGroupInput.value,
       });
       ElMessage.success('节点更新成功');
@@ -410,7 +418,12 @@ watch(activeName, (newVal) => {
 <template>
   <div>
  <el-dialog v-model="Nodedialog" :title="NodeForm.Title" width="80%">
-  <el-input
+  <el-select v-model="NodeForm.SourceType" placeholder="链接类型" style="margin-bottom: 12px">
+          <el-option label="自动识别" value="auto" />
+          <el-option label="代理节点" value="proxy" />
+          <el-option label="远程订阅" value="subscription" />
+        </el-select>
+        <el-input
     v-model="NodeForm.Link"
     placeholder="请输入节点链接，支持多行使用回车或逗号分开"
     type="textarea"

@@ -19,6 +19,7 @@ type Node struct {
 	ID         int
 	Name       string
 	Link       string
+	SourceType string
 	GroupNodes []GroupNode `gorm:"many2many:group_node_nodes"` // 反向关联字段
 }
 
@@ -90,7 +91,7 @@ func (gn *GroupNode) Del() error {
 		log.Println(result.Error)
 		return result.Error
 	}
-	log.Println(gn.Nodes)
+	log.Println("解除分组节点关联")
 	err := DB.Model(gn).Association("Nodes").Delete(gn.Nodes)
 	if err != nil {
 		log.Println("解除关联失败", err)
@@ -174,7 +175,9 @@ func (n *Node) UpdateNode(New *Node) error {
 		return errors.New("节点已经存在") // 如果查询出错，返回错误
 	}
 	// 更新记录
-	return DB.Model(n).Where("id = ?", n.ID).Updates(New).Error
+	return DB.Model(n).Where("id = ?", n.ID).Updates(map[string]interface{}{
+		"name": New.Name, "link": New.Link, "source_type": New.SourceType,
+	}).Error
 }
 
 // 检查分组无绑定则删除
@@ -221,7 +224,7 @@ func (n *Node) UpdateGroup(gns []GroupNode) error {
 				return result.Error // 如果查询出错，返回错误
 			}
 			IsGroupNot := n.GroupNodes // 临时分组节点切片
-			log.Println("NewGroupDatas", IsGroupNot)
+			log.Println("更新节点分组关联")
 
 			// 解除关联
 			// log.Println("分组名称为空,解除关联", NewGroup)

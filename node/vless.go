@@ -135,26 +135,6 @@ func DecodeVLESSURL(s string) (VLESS, error) {
 	if name == "" {
 		name = hostname + ":" + u.Port()
 	}
-	if CheckEnvironment() {
-		fmt.Println("uuid:", uuid)
-		fmt.Println("hostname:", hostname)
-		fmt.Println("port:", port)
-		fmt.Println("encryption:", encryption)
-		fmt.Println("security:", security)
-		fmt.Println("type:", types)
-		fmt.Println("flow:", flow)
-		fmt.Println("headerType:", headerType)
-		fmt.Println("pbk:", pbk)
-		fmt.Println("sid:", sid)
-		fmt.Println("fp:", fp)
-		fmt.Println("alpn:", alpn)
-		fmt.Println("sni:", sni)
-		fmt.Println("path:", path)
-		fmt.Println("host:", host)
-		fmt.Println("serviceName:", serviceName)
-		fmt.Println("mode:", mode)
-		fmt.Println("name:", name)
-	}
 	return VLESS{
 		Name:   name,
 		Uuid:   uuid,
@@ -178,4 +158,3 @@ func DecodeVLESSURL(s string) (VLESS, error) {
 		},
 	}, nil
 }
-

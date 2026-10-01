@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sublink/models"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,8 @@ var Secret []byte
 
 // JwtClaims jwt声明
 type JwtClaims struct {
-	Username string `json:"username"`
+	Username       string `json:"username"`
+	SessionVersion string `json:"session_version"`
 	jwt.StandardClaims
 }
 
@@ -54,8 +56,8 @@ func AuthorToken(c *gin.Context) {
 	mc, err := ParseToken(token)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"code": 401,
-			"msg":  err.Error(),
+			"code": "A0230",
+			"msg":  "登录已失效，请重新登录",
 		})
 		c.Abort()
 		return
@@ -68,12 +70,22 @@ func AuthorToken(c *gin.Context) {
 func ParseToken(tokenString string) (*JwtClaims, error) {
 	// 解析token
 	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (i interface{}, err error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("invalid signing method")
+		}
 		return Secret, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	if claims, ok := token.Claims.(*JwtClaims); ok && token.Valid { // 校验token
+		if claims.SessionVersion == "" || models.DB == nil {
+			return nil, errors.New("login revoked")
+		}
+		user := models.User{Username: claims.Username}
+		if err := user.Find(); err != nil || user.SessionVersion != claims.SessionVersion {
+			return nil, errors.New("login revoked")
+		}
 		return claims, nil
 	}
 	return nil, errors.New("invalid token")

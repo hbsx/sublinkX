@@ -30,7 +30,7 @@ func parsingSS(s string) (string, string, string) {
 	*/
 	u, err := url.Parse(s)
 	if err != nil {
-		log.Println("ss url parse fail.", err)
+		log.Println("ss url parse fail.")
 		return "", "", ""
 	}
 	if u.Scheme != "ss" {
@@ -103,14 +103,6 @@ func DecodeSSURL(s string) (Ss, error) {
 		name = addr
 	}
 	// 开发环境输出结果
-	if CheckEnvironment() {
-		fmt.Println("Param:", Base64Decode(param))
-		fmt.Println("Server", server)
-		fmt.Println("Port", port)
-		fmt.Println("Name:", name)
-		fmt.Println("Cipher:", cipher)
-		fmt.Println("Password:", password)
-	}
 	// 返回结果
 	return Ss{
 		Param: Param{

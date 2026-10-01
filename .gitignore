@@ -7,3 +7,7 @@ data
 sublink_amd64
 sublink_arm64
 sublink.exe
+
+webs/node_modules
+webs/dist
+SHA256SUMS

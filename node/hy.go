@@ -88,16 +88,6 @@ func DecodeHYURL(s string) (HY, error) {
 	if name == "" {
 		name = server + ":" + u.Port()
 	}
-	if CheckEnvironment() {
-		fmt.Println("server:", server)
-		fmt.Println("port:", port)
-		fmt.Println("insecure:", insecure)
-		fmt.Println("auth:", auth)
-		fmt.Println("upMbps:", upMbps)
-		fmt.Println("downMbps:", downMbps)
-		fmt.Println("alpn:", alpn)
-		fmt.Println("name:", name)
-	}
 	return HY{
 		Host:     server,
 		Port:     port,
