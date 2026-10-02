@@ -51,19 +51,52 @@ Actual availability also depends on the receiving client's version. Unsupported 
 ![1712594176714](webs/src/assets/1.png)
 ![1712594176714](webs/src/assets/2.png)
 
-## [Updated Description]
+## Release notes
 
-####Backend Update
+### [2.1.2](https://github.com/hbsx/sublinkX/releases/tag/2.1.2) · 2026-10-02
 
-1. Fix and refactor a large number of Node templates and the underlying code for new groupings
+This release fixes subscription isolation, account security, templates, and installer updates, and includes the current branch's fixes in Docker images and release binaries. See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the full changelog in Chinese.
 
-2. Add grouping functionality to nodes
+#### Subscriptions and account security
 
-3. Fix bug that subscription resolution is empty or etc
+- Isolate concurrent subscription requests so one request cannot read another subscription's nodes.
+- Replace predictable name-based MD5 subscription links with persisted random credentials. Renaming a subscription or restarting normally does not rotate these credentials.
+- Revoke previous login tokens after password changes, account resets, or logout. A login verified against the old password cannot acquire a valid new session during a concurrent password change.
+- Store passwords as bcrypt hashes and migrate legacy plaintext passwords automatically. Existing credentials still work when logging in again.
+- Remove sensitive password, node URL, and subscription credential logging. Existing historical logs are not deleted automatically.
 
-####Front-end update
+#### Proxy detection and network requests
 
-1. Refactor front-end node page to add grouping function (temporarily only some simple functions)
+- Stop treating HTTP/HTTPS proxies as remote subscriptions. The node editor offers automatic detection, proxy node, and remote subscription choices.
+- Automatic detection treats HTTP/HTTPS URLs with user credentials, a name fragment, or only an explicit port as proxies. Select proxy node for an ambiguous proxy using the default port, and remote subscription for ambiguous subscription URLs.
+- Bound subscription, template, and IP lookup requests with timeouts, response status checks, and content size limits.
+
+#### Templates and command-line behavior
+
+- Preserve Surge sections and rules without duplicating them.
+- Return errors for invalid Clash proxy group structures, and continue processing later groups after a relay group.
+- Parse ports as decimal, including leading zeros: `08000` means `8000`. Reject invalid ports.
+- Keep `--version` and `healthcheck` free of directory and application data creation. Health checks also verify the running service version.
+
+#### Docker, installer, and release assets
+
+- Docker images `ghcr.io/hbsx/sublinkx:2.1.2` and `latest` support Linux AMD64, ARMv7, and ARM64.
+- Release assets include Linux AMD64/ARM64 and Windows AMD64 binaries plus `SHA256SUMS`, downloaded from this fork.
+- Linux installation and menu updates verify downloads, stop the service, back up the program and data, and restore them if startup verification fails. Failed port changes also restore the previous state.
+- Keep this branch's AnyTLS, SOCKS5, HTTP/HTTPS, VLESS XHTTP support, and login without a captcha.
+
+#### Upgrade notes
+
+1. Back up existing data first. The database migrates automatically and preserves nodes, subscription names, configuration, and templates; do not delete it.
+2. **Log in again and copy new subscription URLs from the dashboard. Old MD5 links no longer work; replace saved links in your clients.**
+3. Pull the new Docker image and recreate the container with the original `db`, `template`, and `logs` mounts. Restarting an old container does not upgrade it. Docker upgrades do not include the Linux installer's automatic rollback.
+4. For Linux binary deployments, rerun the one-command installer below to update both the program and menu while preserving existing credentials, data, and ports.
+
+Go tests, race detection, static checks, frontend build, ARM64 startup/restart and legacy migration, and installer rollback/checksum checks passed.
+
+### 2.1 (historical release)
+
+- Added node grouping, updated the node management page, and fixed subscription parsing.
 
 ## [Installation instructions]
 
@@ -71,7 +104,7 @@ The latest release in this fork includes AnyTLS, SOCKS5, HTTP/HTTPS, and VLESS X
 
 ### linux method:
 ```
-curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/hbsx/sublinkX/main/install.sh | sudo bash
+curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/hbsx/sublinkX/main/install.sh | sudo bash
 ```
 
 ```sublink``` Calls out the menu.
