@@ -79,8 +79,11 @@ func (gn *GroupNode) Update(NewGn *GroupNode) error {
 
 // 删除分组
 func (gn *GroupNode) Del() error {
+	if gn.ID <= 0 {
+		return errors.New("分组 ID 无效")
+	}
 	// 读取分组数据
-	result := DB.Model(gn).Where("id = ? or name = ?", gn.ID, gn.Name).First(&gn)
+	result := DB.Model(gn).Where("id = ?", gn.ID).First(&gn)
 	if result.Error != nil {
 		log.Println(result.Error)
 		return result.Error
@@ -115,69 +118,75 @@ func GetGroupNodeList() ([]GroupNode, error) {
 
 // 添加节点的方法
 func (n *Node) Add() error {
+	return addNode(DB, n)
+}
+
+func addNode(tx *gorm.DB, n *Node) error {
 	// 检查节点是否已存在
 	var existingNode Node
-	result := DB.Model(n).Where("link = ? and name =?", n.Link, n.Name).First(&existingNode) // 查询数据库中是否存在同名同链接的节点
+	result := tx.Where("link = ? and name =?", n.Link, n.Name).First(&existingNode)
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return result.Error // 如果查询出错，返回错误
 	}
 	if result.RowsAffected > 0 {
 		// log.Println("节点已经存在")
-		return nil // 如果节点已经存在就跳过
+		*n = existingNode
+		return nil // Reuse the persisted identity.
 	}
-	return DB.Model(n).Create(n).Error // 使用 GORM 创建新的节点记录
+	return tx.Omit("GroupNodes").Create(n).Error
+}
+
+func (n *Node) AddWithGroups(groups []GroupNode) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := addNode(tx, n); err != nil {
+			return err
+		}
+		var stored Node
+		if err := tx.Preload("GroupNodes").First(&stored, n.ID).Error; err != nil {
+			return err
+		}
+		return replaceNodeGroups(tx, n, append(stored.GroupNodes, groups...))
+	})
 }
 
 // 删除节点
 func (n *Node) Del() error {
-	// 查看是否有关联 有的话解除关联
-	DB.Model(n).Preload("GroupNodes").First(n) // 预加载分组节点
-	gns := n.GroupNodes
-
-	if len(n.GroupNodes) > 0 {
-		err := DB.Model(n).Association("GroupNodes").Delete(n.GroupNodes)
-		if err != nil {
+	if n.ID <= 0 {
+		return errors.New("节点 ID 无效")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var existing Node
+		if err := tx.Preload("GroupNodes").First(&existing, n.ID).Error; err != nil {
 			return err
 		}
-	}
-	IsGroupNotDel(gns)
-	// 如果分组节点没有关联的节点则删除分组节点
-	// for _, gn := range gns {
-	// 	DB.Model(gn).Preload("Nodes").Find(&gn) // 预加载分组节点数据
-	// 	log.Println("gnNodes:", gn.Nodes)
-	// 	if len(gn.Nodes) == 0 {
-	// 		// log.Println("分组节点没有关联的节点，删除分组节点", gn.Name)
-	// 		err := DB.Model(gn).Delete(&gn).Error // 删除分组节点
-	// 		if err != nil {
-	// 			log.Println("删除分组节点失败", err)
-	// 			return err
-	// 		}
-	// 	}
-	// }
-	// Unscoped  硬删除
-	// 默认删除是软删除 数据库仍然存在记录
-	return DB.Model(n).Delete(n).Error
+		previousGroups := append([]GroupNode(nil), existing.GroupNodes...)
+		if err := tx.Model(&existing).Association("GroupNodes").Clear(); err != nil {
+			return err
+		}
+		if err := tx.Table("subcription_nodes").Where("node_id = ?", existing.ID).Delete(nil).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&existing).Error; err != nil {
+			return err
+		}
+		for _, group := range previousGroups {
+			if tx.Model(&group).Association("Nodes").Count() == 0 {
+				if err := tx.Delete(&group).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
-
-// 更新节点
-
-func (n *Node) UpdateNode(New *Node) error {
-	// 检查节点是否已存在
-	var n1 Node
-	result := DB.Model(n).Where("id = ?", New.ID).First(&n1) // 查询数据库中是否存在同名同链接的节点
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		log.Println(result.Error)
-		return result.Error // 如果查询出错，返回错误
-
+func (n *Node) UpdateNode(next *Node) error {
+	if n.ID <= 0 {
+		return errors.New("节点 ID 无效")
 	}
-	if result.RowsAffected > 0 {
-		log.Println("节点已经存在", result.Error)
-		return errors.New("节点已经存在") // 如果查询出错，返回错误
+	if err := DB.First(&Node{}, n.ID).Error; err != nil {
+		return err
 	}
-	// 更新记录
-	return DB.Model(n).Where("id = ?", n.ID).Updates(map[string]interface{}{
-		"name": New.Name, "link": New.Link, "source_type": New.SourceType,
-	}).Error
+	return DB.Model(&Node{}).Where("id = ?", n.ID).Updates(map[string]interface{}{"name": next.Name, "link": next.Link, "source_type": next.SourceType}).Error
 }
 
 // 检查分组无绑定则删除
@@ -200,59 +209,60 @@ func IsGroupNotDel(gns []GroupNode) error {
 
 // 更新关联分组
 
-func (n *Node) UpdateGroup(gns []GroupNode) error {
-	// 检测节点是否存在
-	result := DB.Model(n).Where("id = ? or name = ?", n.ID, n.Name).First(&n) // 查找节点
-	if result.Error != nil {
-		log.Println(result.Error)
-		return result.Error // 如果查询出错，返回错误
+func resolveNode(tx *gorm.DB, n *Node) error {
+	if n.ID > 0 {
+		return tx.First(n, n.ID).Error
 	}
-
-	// 检查分组是否已存在
-	var NewGroupDatas []GroupNode
-
-	for _, gn := range gns {
-
-		// var NewGroupData GroupNode
-
-		if gn.Name == "" {
-
-			// 预加载关联
-			result := DB.Model(n).Preload("GroupNodes").First(n) // 预加载分组节点
-			if result.Error != nil {
-				log.Println(result.Error)
-				return result.Error // 如果查询出错，返回错误
-			}
-			IsGroupNot := n.GroupNodes // 临时分组节点切片
-			log.Println("更新节点分组关联")
-
-			// 解除关联
-			// log.Println("分组名称为空,解除关联", NewGroup)
-			err := DB.Model(n).Association("GroupNodes").Clear()
-			if err != nil {
-				log.Println("解除关联失败", err)
-				return err
-			}
-			//
-
-			err = IsGroupNotDel(IsGroupNot) // 检查分组节点是否有绑定的节点，如果没有则删除分组节点
-			if err != nil {
-				log.Println(err)
-				// return err // 如果检查分组节点失败，返回错误
-			}
-			return nil
-		}
-		result := DB.Model(gn).Where("name = ?", gn.Name).First(&gn) // 查找分组
-		// 没有找到记录
-		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println(result.Error)
-			return result.Error // 如果查询出错，返回错误
-		}
-		NewGroupDatas = append(NewGroupDatas, gn) // 将新的数据添加到更新列表中
+	if n.Name == "" {
+		return errors.New("节点 ID 无效")
 	}
-
-	// 更新记录
-	return DB.Model(n).Association("GroupNodes").Replace(NewGroupDatas) // 替换分组节点
+	var matches []Node
+	if err := tx.Where("name = ?", n.Name).Find(&matches).Error; err != nil {
+		return err
+	}
+	if len(matches) != 1 {
+		return errors.New("节点不存在或同名，请按 ID 选择")
+	}
+	*n = matches[0]
+	return nil
+}
+func replaceNodeGroups(tx *gorm.DB, n *Node, groups []GroupNode) error {
+	resolved := []GroupNode{}
+	seen := map[string]bool{}
+	for _, group := range groups {
+		if group.Name == "" || seen[group.Name] {
+			continue
+		}
+		seen[group.Name] = true
+		var actual GroupNode
+		if err := tx.Where("name = ?", group.Name).FirstOrCreate(&actual, GroupNode{Name: group.Name}).Error; err != nil {
+			return err
+		}
+		resolved = append(resolved, actual)
+	}
+	return tx.Model(n).Omit("GroupNodes.*").Association("GroupNodes").Replace(resolved)
+}
+func (n *Node) UpdateGroup(groups []GroupNode) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := resolveNode(tx, n); err != nil {
+			return err
+		}
+		return replaceNodeGroups(tx, n, groups)
+	})
+}
+func (n *Node) UpdateNodeAndGroups(next *Node, groups []GroupNode) error {
+	if n.ID <= 0 {
+		return errors.New("节点 ID 无效")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := resolveNode(tx, n); err != nil {
+			return err
+		}
+		if err := tx.Model(&Node{}).Where("id = ?", n.ID).Updates(map[string]interface{}{"name": next.Name, "link": next.Link, "source_type": next.SourceType}).Error; err != nil {
+			return err
+		}
+		return replaceNodeGroups(tx, n, groups)
+	})
 }
 
 // 查看所有节点

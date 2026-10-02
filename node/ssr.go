@@ -50,68 +50,54 @@ func EncodeSSRURL(s Ssr) string {
 }
 
 // ssr解码
-func DecodeSSRURL(s string) (Ssr, error) {
-	/*解析格式
-	ssr://base64(host:port:protocol:method:obfs:base64(password)/?obfsparam=base64(obfsparam)&protoparam=base64(protoparam)&remarks=base64(remarks)&group=base64(group))
-	*/
-	// 处理url链接中的base64编码
-	parts := strings.SplitN(s, "ssr://", 2)
-	if len(parts) != 2 {
-		return Ssr{}, errors.New("invalid SSR URL")
+func DecodeSSRURL(raw string) (Ssr, error) {
+	if !strings.HasPrefix(raw, "ssr://") {
+		return Ssr{}, errors.New("SSR 协议无效")
 	}
-	s = parts[0] + Base64Decode(parts[1])
-	// 检查是否包含"/?" 如果有就是有备注信息
-	var remarks, obfsparam string
-	if strings.Contains(s, "/?") {
-		// 解析备注信息
-		query := strings.Split(s, "/?")[1]
-		s = strings.Replace(s, "/?"+query, "", 1)
-		paramMap := make(map[string]string)
-		if strings.Contains(query, "&") {
-			params := strings.Split(query, "&")
-			for _, param := range params {
-				parts := strings.SplitN(param, "=", 2)
-				if len(parts) != 2 {
-					fmt.Println("Invalid SSR parameter")
-					continue
-				}
-				paramMap[parts[0]] = parts[1]
+	decoded, err := decodeBase64(strings.TrimPrefix(raw, "ssr://"))
+	if err != nil {
+		return Ssr{}, err
+	}
+	body, query, _ := strings.Cut(decoded, "/?")
+	values := make(map[string]string)
+	if query != "" {
+		for _, part := range strings.Split(query, "&") {
+			key, value, ok := strings.Cut(part, "=")
+			if !ok || key == "" {
+				return Ssr{}, errors.New("SSR 查询参数无效")
 			}
-		} else {
-			q := strings.Split(query, "=")
-			paramMap[q[0]] = q[1]
+			if value != "" {
+				value, err = decodeBase64(value)
+				if err != nil {
+					return Ssr{}, err
+				}
+			}
+			values[key] = value
 		}
-		remarks = Base64Decode(paramMap["remarks"])
-		obfsparam = Base64Decode(paramMap["obfsparam"])
 	}
-	// 反着解析参数 怕有ipv6地址冒号混淆
-	param := strings.Split(s, ":")
-	if len(param) < 6 {
-		return Ssr{}, errors.New("长度没有6")
+	fields := strings.Split(body, ":")
+	if len(fields) < 6 {
+		return Ssr{}, errors.New("SSR 字段不足")
 	}
-	password := param[len(param)-1]
-	obfs := param[len(param)-2]
-	method := param[len(param)-3]
-	protocol := param[len(param)-4]
-	port, _ := strconv.Atoi(param[len(param)-5])
-	server := ValRetIPv6Addr(param[len(param)-6])
-	// 如果没有备注默认使用服务器+端口作为备注
-	if remarks == "" {
-		remarks = server + ":" + strconv.Itoa(port)
+	offset := len(fields) - 5
+	server := strings.Trim(strings.Join(fields[:offset], ":"), "[]")
+	port, err := validPort(fields[offset])
+	if err != nil {
+		return Ssr{}, err
 	}
-	return Ssr{
-		Server:   server,
-		Port:     port,
-		Protocol: protocol,
-		Method:   method,
-		Obfs:     obfs,
-		Password: password,
-		Qurey: Ssrquery{
-			Obfsparam: obfsparam,
-			Remarks:   remarks,
-		},
-		Type: "ssr",
-	}, nil
+	password, err := decodeBase64(fields[offset+4])
+	if err != nil || password == "" {
+		return Ssr{}, errors.New("SSR 密码无效")
+	}
+	if server == "" || fields[offset+1] == "" || fields[offset+2] == "" || fields[offset+3] == "" {
+		return Ssr{}, errors.New("SSR 必要字段为空")
+	}
+	name := values["remarks"]
+	if name == "" {
+		name = fmt.Sprintf("%s:%d", server, port)
+	}
+	return Ssr{Server: server, Port: port, Protocol: fields[offset+1], Method: fields[offset+2], Obfs: fields[offset+3], Password: password,
+		Qurey: Ssrquery{Remarks: name, Obfsparam: values["obfsparam"]}, Type: "ssr"}, nil
 }
 
 type Ssr struct {

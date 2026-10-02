@@ -78,6 +78,9 @@ func convertToInt(value interface{}) (int, error) {
 	case int:
 		return v, nil
 	case float64:
+		if v != float64(int(v)) {
+			return 0, fmt.Errorf("节点数字必须为整数")
+		}
 		return int(v), nil
 	case string:
 		return strconv.Atoi(v)
@@ -93,13 +96,15 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 	var proxys []Proxy
 
 	for _, link := range urls {
+		if _, err := NodeName(link); err != nil {
+			return nil, fmt.Errorf("节点解析失败")
+		}
 		Scheme := strings.ToLower(strings.Split(link, "://")[0])
 		switch {
 		case Scheme == "anytls":
 			anytls, err := DecodeAnyTLSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			if anytls.Name == "" {
 				anytls.Name = fmt.Sprintf("%s:%d", anytls.Server, anytls.Port)
@@ -119,8 +124,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "socks" || Scheme == "socks5" || Scheme == "http" || Scheme == "https":
 			standard, err := DecodeStandardProxyURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			if standard.Name == "" {
 				standard.Name = fmt.Sprintf("%s:%d", standard.Server, standard.Port)
@@ -143,8 +147,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "ss":
 			ss, err := DecodeSSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if ss.Name == "" {
@@ -164,7 +167,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "ssr":
 			ssr, err := DecodeSSRURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
+				return nil, fmt.Errorf("SSR 节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if ssr.Qurey.Remarks == "" {
@@ -187,8 +190,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "trojan":
 			trojan, err := DecodeTrojanURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if trojan.Name == "" {
@@ -220,8 +222,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "vmess":
 			vmess, err := DecodeVMESSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if vmess.Ps == "" {
@@ -241,25 +242,27 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 			port, _ := convertToInt(vmess.Port)
 			aid, _ := convertToInt(vmess.Aid)
 			vmessproxy := Proxy{
-				Name:             vmess.Ps,
-				Type:             "vmess",
-				Server:           vmess.Add,
-				Port:             port,
-				Cipher:           vmess.Scy,
-				Uuid:             vmess.Id,
-				AlterId:          strconv.Itoa(aid),
-				Network:          vmess.Net,
-				Tls:              tls,
-				Ws_opts:          ws_opts,
-				Udp:              sqlconfig.Udp,
-				Skip_cert_verify: sqlconfig.Cert,
+				Name:               vmess.Ps,
+				Servername:         vmess.Sni,
+				Client_fingerprint: vmess.Fp,
+				Alpn:               splitCommaList(vmess.Alpn),
+				Type:               "vmess",
+				Server:             vmess.Add,
+				Port:               port,
+				Cipher:             vmess.Scy,
+				Uuid:               vmess.Id,
+				AlterId:            strconv.Itoa(aid),
+				Network:            vmess.Net,
+				Tls:                tls,
+				Ws_opts:            ws_opts,
+				Udp:                sqlconfig.Udp,
+				Skip_cert_verify:   sqlconfig.Cert,
 			}
 			proxys = append(proxys, vmessproxy)
 		case Scheme == "vless":
 			vless, err := DecodeVLESSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if vless.Name == "" {
@@ -324,8 +327,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "hy" || Scheme == "hysteria":
 			hy, err := DecodeHYURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if hy.Name == "" {
@@ -348,8 +350,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "hy2" || Scheme == "hysteria2":
 			hy2, err := DecodeHY2URL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if hy2.Name == "" {
@@ -373,8 +374,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 		case Scheme == "tuic":
 			tuic, err := DecodeTuicURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return nil, fmt.Errorf("节点解析失败")
 			}
 			// 如果没有名字，就用服务器地址作为名字
 			if tuic.Name == "" {
@@ -437,10 +437,28 @@ func DecodeClash(proxys []Proxy, yamlfile string) ([]byte, error) {
 		// 如果 "proxies" 键不存在，创建一个新的切片
 		proxies = []interface{}{}
 	}
+	usedNames := map[string]bool{"DIRECT": true, "REJECT": true}
+	for _, entry := range proxies {
+		if p, ok := entry.(map[string]interface{}); ok {
+			if name, ok := p["name"].(string); ok {
+				usedNames[name] = true
+			}
+		}
+	}
+	if groups, ok := config["proxy-groups"].([]interface{}); ok {
+		for _, entry := range groups {
+			if group, ok := entry.(map[string]interface{}); ok {
+				if name, ok := group["name"].(string); ok {
+					usedNames[name] = true
+				}
+			}
+		}
+	}
 	// 定义一个代理列表名字
 	ProxiesNameList := []string{}
 	// 添加新代理
 	for _, p := range proxys {
+		p.Name = uniqueName(p.Name, usedNames)
 		ProxiesNameList = append(ProxiesNameList, p.Name)
 		proxies = append(proxies, p)
 	}
@@ -492,5 +510,5 @@ func DecodeClash(proxys []Proxy, yamlfile string) ([]byte, error) {
 	if err != nil {
 		log.Printf("error: %v", err)
 	}
-	return newData, nil
+	return newData, err
 }

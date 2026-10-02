@@ -44,10 +44,11 @@ const Surge = ref('')
 const SubTitle = ref('')
 const Subname = ref('')
 const oldSubname = ref('')
+const editingSubId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const table = ref()
 const NodesList = ref<Node[]>([])
-const value1 = ref<string[]>([])
+const value1 = ref<number[]>([])
 const checkList = ref<string[]>([]) // 配置列表
 const iplogsdialog = ref(false)
 const IplogsList = ref<SubLogs[]>([])
@@ -84,7 +85,7 @@ const addSubs = async ()=>{
     await AddSub({
       config: config,
       name: Subname.value.trim(),
-      nodes: value1.value.join(',')
+      node_ids: JSON.stringify(value1.value)
     })
     getsubs()
     ElMessage.success("添加成功");
@@ -92,8 +93,9 @@ const addSubs = async ()=>{
     await UpdateSub({
       config: config,
       name: Subname.value.trim(),
-      nodes: value1.value.join(','),
-      oldname: oldSubname.value
+      node_ids: JSON.stringify(value1.value),
+      oldname: oldSubname.value,
+      id: editingSubId.value
     })
     getsubs()
     ElMessage.success("更新成功");
@@ -131,6 +133,7 @@ const toggleSelection = () => {
 
 const handleAddSub = ()=>{
   SubTitle.value = '添加订阅'
+  editingSubId.value = null
   Subname.value = ''
   oldSubname.value = ''
   checkList.value = []
@@ -141,6 +144,8 @@ const handleAddSub = ()=>{
 }
 
 const handleEdit = (row:any) => {
+  checkList.value = []
+  editingSubId.value = row.ID
   for (let i = 0; i < tableData.value.length; i++) {
     if (tableData.value[i].ID === row.ID) {
       function toConfig(value: string | Config): Config {
@@ -163,7 +168,7 @@ const handleEdit = (row:any) => {
       Clash.value = config.clash
       Surge.value = config.surge
       dialogVisible.value = true
-      value1.value = tableData.value[i].Nodes.map((item) => item.Name)
+      value1.value = tableData.value[i].Nodes.map((item) => item.ID)
     }
   }
 }
@@ -291,7 +296,7 @@ const OpenUrl = (url:string) => {
 const clientradio = ref('1')
 
 // 注册拖拽函数
-const toggleSelect = (name: string) => {
+const toggleSelect = (name: number) => {
   const index = value1.value.indexOf(name)
   if (index === -1) {
     value1.value.push(name)
@@ -386,9 +391,9 @@ const toggleSelect = (name: string) => {
     >
       <el-option
         v-for="item in NodesList"
-        :key="item.Name"
+        :key="item.ID"
         :label="item.Name"
-        :value="item.Name"
+        :value="item.ID"
       />
         <div style="margin-top: 20px">
 
@@ -397,7 +402,7 @@ const toggleSelect = (name: string) => {
     <p>已选节点（可拖拽排序）</p>
     <VueDraggable v-model="value1" :animation="150" ghost-class="ghost">
       <div v-for="(nodeName, index) in value1" :key="nodeName" class="draggable-item">
-        <span class="row-number">{{ index + 1 }}.</span> {{ nodeName }}
+        <span class="row-number">{{ index + 1 }}.</span> {{ NodesList.find(item => item.ID === nodeName)?.Name || nodeName }}
       </div>
     </VueDraggable>
 
@@ -431,7 +436,7 @@ const toggleSelect = (name: string) => {
     <el-table-column prop="Link" label="链接" :show-overflow-tooltip="true" >
       <template #default="{row}">
         <div v-if="row.Nodes">
-          <el-link type="primary" size="small" @click="handleClient(row)">客户端</el-link>
+          <el-link type="primary" size="small" @click="handleClient(row as Sub)">客户端</el-link>
         </div>
         </template>
       </el-table-column>

@@ -53,6 +53,22 @@ Actual availability also depends on the receiving client's version. Unsupported 
 
 ## Release notes
 
+### [2.1.3](https://github.com/hbsx/sublinkX/releases/tag/2.1.3) · 2026-10-02
+
+- Reject invalid deletion IDs; update nodes and groups atomically.
+- Use stable IDs for node selection, ordering, subscription editing and access logs. Migrate legacy ordering while preserving associations and existing 2.1.2 subscription tokens.
+- Preserve renamed, duplicate and comma-containing node names; resolve generated Clash/Surge name collisions.
+- Handle malformed VMess/SS/SSR input without panics; preserve SSR passwords, SS/SSR IPv6, VMess SNI and ALPN, and reject invalid ports.
+- Hide request credentials and panic values in recovery logs.
+- Preserve comma parameters in URLs, validate local and remote input, and reject HTML or error text as subscriptions. Use newlines for batch input.
+- Respect HTTPS reverse proxy headers for Surge updates. The proxy should overwrite `X-Forwarded-Proto`.
+- Reset subscription editor security flags and clear stale empty node lists.
+- Block renaming or deleting templates used by subscriptions; switch those subscriptions to another template first. In-place editing remains available.
+
+**Upgrade:** back up data, pull `ghcr.io/hbsx/sublinkx:2.1.3`, and recreate the container with existing mounts. Existing 2.1.2 subscription links remain valid; older MD5 links still need replacement. Refresh cached dashboard assets after upgrading.
+
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for details and verification scope. The checks cover confirmed scenarios and do not guarantee that the entire application is free of defects.
+
 ### [2.1.2](https://github.com/hbsx/sublinkX/releases/tag/2.1.2) · 2026-10-02
 
 This release fixes subscription isolation, account security, templates, and installer updates, and includes the current branch's fixes in Docker images and release binaries. See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the full changelog in Chinese.

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -9,88 +8,36 @@ import (
 	"strings"
 	"sublink/models"
 	"sublink/node"
+	"sublink/utils"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-func DocodeNodeName(nd *models.Node) (models.Node, error) { // 解码节点名称
-	if nd.Name == "" {
-		u, err := url.Parse(nd.Link)
+func DocodeNodeName(nd *models.Node) (models.Node, error) {
+	links := node.SplitLinks(nd.Link)
+	if len(links) == 0 {
+		return *nd, fmt.Errorf("节点链接不能为空")
+	}
+	for _, link := range links {
+		if utils.IsRemoteSubscription(link, nd.SourceType) {
+			u, err := url.Parse(link)
+			if err != nil || u.Hostname() == "" {
+				return *nd, fmt.Errorf("订阅地址无效")
+			}
+			if nd.Name == "" {
+				nd.Name = u.Hostname()
+			}
+			continue
+		}
+		if nd.SourceType == "subscription" {
+			return *nd, fmt.Errorf("订阅地址必须使用 HTTP 或 HTTPS")
+		}
+		name, err := node.NodeName(link)
 		if err != nil {
-			log.Println("节点解析失败")
 			return *nd, err
 		}
-		switch {
-		case u.Scheme == "anytls":
-			anytls, err := node.DecodeAnyTLSURL(nd.Link)
-			if err != nil {
-				return *nd, err
-			}
-			nd.Name = anytls.Name
-		case u.Scheme == "socks" || u.Scheme == "socks5" || u.Scheme == "http" || u.Scheme == "https":
-			standard, err := node.DecodeStandardProxyURL(nd.Link)
-			if err != nil {
-				return *nd, err
-			}
-			nd.Name = standard.Name
-		case u.Scheme == "ss":
-			ss, err := node.DecodeSSURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = ss.Name
-		case u.Scheme == "ssr":
-			ssr, err := node.DecodeSSRURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = ssr.Qurey.Remarks
-		case u.Scheme == "trojan":
-			trojan, err := node.DecodeTrojanURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = trojan.Name
-		case u.Scheme == "vmess":
-			vmess, err := node.DecodeVMESSURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = vmess.Ps
-
-		case u.Scheme == "vless":
-			vless, err := node.DecodeVLESSURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = vless.Name
-		case u.Scheme == "hy" || u.Scheme == "hysteria":
-			hy, err := node.DecodeHYURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = hy.Name
-		case u.Scheme == "hy2" || u.Scheme == "hysteria2":
-			hy2, err := node.DecodeHY2URL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = hy2.Name
-		case u.Scheme == "tuic":
-			tuic, err := node.DecodeTuicURL(nd.Link)
-			if err != nil {
-				log.Println("节点解析失败")
-				return *nd, err
-			}
-			nd.Name = tuic.Name
+		if nd.Name == "" {
+			nd.Name = name
 		}
 	}
 	return *nd, nil
@@ -108,7 +55,7 @@ func NodeUpdadte(c *gin.Context) {
 	group := c.PostForm("group")        // 分组
 	groups := strings.Split(group, ",") // 分组列表
 	index, err := strconv.Atoi(id)
-	if err != nil {
+	if err != nil || index <= 0 {
 		c.JSON(400, gin.H{
 			"msg": "id 不能为空或者格式不正确",
 		})
@@ -129,6 +76,10 @@ func NodeUpdadte(c *gin.Context) {
 		Link:       Newlink,
 		SourceType: sourceType,
 	}
+	if _, err := DocodeNodeName(NewNode); err != nil {
+		c.JSON(400, gin.H{"msg": "节点链接无效"})
+		return
+	}
 	var gns []models.GroupNode
 	if groups != nil || len(groups) > 0 {
 		for _, g := range groups {
@@ -139,18 +90,9 @@ func NodeUpdadte(c *gin.Context) {
 		}
 
 	}
-	err = OldNode.UpdateGroup(gns) // 更新分组
+	err = OldNode.UpdateNodeAndGroups(NewNode, gns)
 	if err != nil {
-		c.JSON(400, gin.H{
-			"msg": fmt.Sprintf("更新失败: %s", err.Error()),
-		})
-		return
-	}
-	err = OldNode.UpdateNode(NewNode)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"msg": fmt.Sprintf("更新失败: %s", err.Error()),
-		})
+		c.JSON(400, gin.H{"msg": "更新节点失败"})
 		return
 	}
 
@@ -200,64 +142,31 @@ func GroupNodeGet(c *gin.Context) {
 
 // 设置关联分组
 func GroupNodeSet(c *gin.Context) {
-	// var n models.Node
-	var gns []models.GroupNode
-	var FirstGroup models.GroupNode
-	name := c.PostForm("name")
-	group := c.PostForm("group")
-
-	// 将group分割成多个分组
-	groups := strings.Split(group, ",")
-	if len(groups) == 0 {
-		c.JSON(400, gin.H{
-			"msg": "分组不能为空",
-		})
-		return
-	}
-	log.Println("分组列表:", groups, "数组长度", len(groups))
-
-	// 循环生成或绑定分组
-	for _, g := range groups {
-		// 如果group为空，跳过
-		if strings.TrimSpace(g) == "" {
-			log.Println("分组名为空，跳过")
-			continue
-		}
-		log.Println("分组名:", g)
-		FirstGroup.Name = g
-		err := FirstGroup.Add()
-		if err != nil {
-			log.Println("添加分组失败:", err)
-			c.JSON(400, gin.H{
-				"msg": err.Error(),
-			})
+	n := models.Node{Name: c.PostForm("name")}
+	if raw := c.PostForm("id"); raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 {
+			c.JSON(400, gin.H{"msg": "节点 ID 无效"})
 			return
 		}
-		// 查找分组并将数据FirstGroup填充 并且插入给gns
-		result := models.DB.Model(models.GroupNode{}).Where("name = ?", g).First(&FirstGroup)
-		log.Println("FirstGroup", FirstGroup)
-		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println(result.Error)
-			c.JSON(400, gin.H{
-				"msg": result.Error,
-			})
-			return
-		}
-		gns = append(gns, FirstGroup)
+		n.ID = id
 	}
-
-	n := models.Node{Name: name}
-	err := n.UpdateGroup(gns)
-	if err != nil {
-		c.JSON(400, gin.H{
-			"msg": err.Error(),
-		})
+	groups := groupForm(c.PostForm("group"))
+	if err := n.UpdateGroup(groups); err != nil {
+		c.JSON(400, gin.H{"msg": "更新关联分组失败"})
 		return
 	}
-	c.JSON(200, gin.H{
-		"code": "00000",
-		"msg":  "更新关联分组成功",
-	})
+	c.JSON(200, gin.H{"code": "00000", "msg": "更新关联分组成功"})
+}
+
+func groupForm(raw string) []models.GroupNode {
+	groups := []models.GroupNode{}
+	for _, name := range strings.Split(raw, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			groups = append(groups, models.GroupNode{Name: name})
+		}
+	}
+	return groups
 }
 
 // 添加节点
@@ -276,7 +185,7 @@ func NodeAdd(c *gin.Context) {
 		Link:       link,
 		SourceType: sourceType,
 	}
-	if link == "" && !strings.Contains(link, "://") {
+	if link == "" || !strings.Contains(link, "://") {
 		c.JSON(400, gin.H{
 			"msg": "link不能为空或者格式不正确,请检查链接是否包含协议头,例如 http:// 或 https://",
 		})
@@ -292,44 +201,10 @@ func NodeAdd(c *gin.Context) {
 		return
 	}
 
-	// 添加节点
-	err = n.Add()
-	if err != nil {
-		log.Println("添加节点失败:", err)
-		c.JSON(400, gin.H{
-			"msg": err.Error(),
-		})
+	if err := n.AddWithGroups(groupForm(group)); err != nil {
+		c.JSON(400, gin.H{"msg": "添加节点或分组失败"})
 		return
 	}
-
-	// 关联分组开始
-	if strings.TrimSpace(group) != "" { // 去除空格后判断分组是否为空
-		groups := strings.Split(group, ",") // 允许多个分组用逗号分隔
-		if groups != nil || len(groups) > 0 {
-			for _, g := range groups {
-				gn := &models.GroupNode{Name: g}
-				err = gn.Add()
-				if err != nil {
-					// 分组不存在
-					log.Println("节点解析失败")
-					c.JSON(400, gin.H{
-						"msg": err,
-					})
-					return
-				}
-				// 分组存在，关联节点
-				if err := gn.Ass(&n); err != nil {
-					log.Println("关联失败:", err)
-					c.JSON(400, gin.H{
-						"msg": err,
-					})
-					return
-				}
-
-			}
-		}
-	}
-	//关联分组结束
 
 	c.JSON(200, gin.H{
 		"code": "00000",
@@ -347,9 +222,13 @@ func NodeDel(c *gin.Context) {
 		})
 		return
 	}
-	x, _ := strconv.Atoi(id)
+	x, err := strconv.Atoi(id)
+	if err != nil || x <= 0 {
+		c.JSON(400, gin.H{"msg": "节点 ID 无效"})
+		return
+	}
 	n.ID = x
-	err := n.Del()
+	err = n.Del()
 	if err != nil {
 		c.JSON(400, gin.H{
 			"msg": "删除失败",
@@ -372,9 +251,13 @@ func NodesGroup(c *gin.Context) {
 		})
 		return
 	}
-	x, _ := strconv.Atoi(id)
+	x, err := strconv.Atoi(id)
+	if err != nil || x <= 0 {
+		c.JSON(400, gin.H{"msg": "分组 ID 无效"})
+		return
+	}
 	gn.ID = x
-	err := gn.Del()
+	err = gn.Del()
 	if err != nil {
 		c.JSON(400, gin.H{
 			"msg": "删除失败",

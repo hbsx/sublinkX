@@ -73,7 +73,10 @@ func DecodeHYURL(s string) (HY, error) {
 		return HY{}, fmt.Errorf("非hy协议: %s", s)
 	}
 	server := u.Hostname()
-	port, _ := strconv.Atoi(u.Port())
+	if err := validateEndpoint(u, false); err != nil {
+		return HY{}, err
+	}
+	port, _ := validPort(u.Port())
 	insecure, _ := strconv.Atoi(u.Query().Get("insecure"))
 	auth := u.Query().Get("auth")
 	upMbps, _ := strconv.Atoi(u.Query().Get("upmbps"))
@@ -92,6 +95,7 @@ func DecodeHYURL(s string) (HY, error) {
 		Host:     server,
 		Port:     port,
 		Insecure: insecure,
+		Peer:     u.Query().Get("peer"),
 		Auth:     auth,
 		UpMbps:   upMbps,
 		DownMbps: downMbps,

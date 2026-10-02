@@ -39,6 +39,9 @@ func InitSqlite() {
 	if err := MigrateSecurity(db); err != nil {
 		log.Fatal("安全配置迁移失败: ", err)
 	}
+	if err := MigrateSubscriptionOrder(db); err != nil {
+		log.Fatal("订阅排序迁移失败: ", err)
+	}
 	// 初始化用户数据
 	err = db.First(&User{}).Error
 	if err == gorm.ErrRecordNotFound {

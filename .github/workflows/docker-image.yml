@@ -44,7 +44,26 @@ jobs:
           docker compose config --quiet
           python3 scripts/test-install.py
           go test -race ./...
+          go test ./node -fuzz=FuzzNodeParsersDoNotPanic -fuzztime=10s -parallel=2
           go vet ./...
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: webs/pnpm-lock.yaml
+
+      - name: Check frontend
+        run: |
+          pnpm --dir webs install --frozen-lockfile
+          pnpm --dir webs test
+          pnpm --dir webs build
 
   build:
     needs: test

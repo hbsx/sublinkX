@@ -35,7 +35,10 @@ func DecodeTuicURL(s string) (Tuic, error) {
 	// log.Println(password)
 	// password = Base64Decode2(password)
 	server := u.Hostname()
-	port, _ := strconv.Atoi(u.Port())
+	if err := validateEndpoint(u, true); err != nil {
+		return Tuic{}, err
+	}
+	port, _ := validPort(u.Port())
 	Congestioncontrol := u.Query().Get("Congestion_control")
 	alpns := u.Query().Get("alpn")
 	alpn := strings.Split(alpns, ",")

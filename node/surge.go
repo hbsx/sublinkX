@@ -11,15 +11,19 @@ import (
 
 func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 	var proxys, groups []string
+	usedNames := map[string]bool{"DIRECT": true, "REJECT": true}
 	for _, link := range urls {
+		if _, err := NodeName(link); err != nil {
+			return "", fmt.Errorf("节点解析失败")
+		}
 		Scheme := strings.Split(link, "://")[0]
 		switch {
 		case Scheme == "ss":
 			ss, err := DecodeSSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return "", fmt.Errorf("节点解析失败")
 			}
+			ss.Name = uniqueName(ss.Name, usedNames)
 			proxy := map[string]interface{}{
 				"name":     ss.Name,
 				"server":   ss.Server,
@@ -35,14 +39,14 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "vmess":
 			vmess, err := DecodeVMESSURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return "", fmt.Errorf("节点解析失败")
 			}
 			tls := false
 			if vmess.Tls != "none" && vmess.Tls != "" {
 				tls = true
 			}
 			port, _ := convertToInt(vmess.Port)
+			vmess.Ps = uniqueName(vmess.Ps, usedNames)
 			proxy := map[string]interface{}{
 				"name":             vmess.Ps,
 				"server":           vmess.Add,
@@ -71,9 +75,9 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "trojan":
 			trojan, err := DecodeTrojanURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return "", fmt.Errorf("节点解析失败")
 			}
+			trojan.Name = uniqueName(trojan.Name, usedNames)
 			proxy := map[string]interface{}{
 				"name":             trojan.Name,
 				"server":           trojan.Hostname,
@@ -93,9 +97,9 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "hysteria2" || Scheme == "hy2":
 			hy2, err := DecodeHY2URL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return "", fmt.Errorf("节点解析失败")
 			}
+			hy2.Name = uniqueName(hy2.Name, usedNames)
 			proxy := map[string]interface{}{
 				"name":             hy2.Name,
 				"server":           hy2.Host,
@@ -115,9 +119,9 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 		case Scheme == "tuic":
 			tuic, err := DecodeTuicURL(link)
 			if err != nil {
-				log.Println("节点或模板解析失败")
-				continue
+				return "", fmt.Errorf("节点解析失败")
 			}
+			tuic.Name = uniqueName(tuic.Name, usedNames)
 			proxy := map[string]interface{}{
 				"name":             tuic.Name,
 				"server":           tuic.Host,
@@ -131,6 +135,9 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 			groups = append(groups, tuic.Name)
 			proxys = append(proxys, tuicproxy)
 		}
+	}
+	if len(proxys) == 0 {
+		return "", fmt.Errorf("没有 Surge 支持的节点")
 	}
 	return DecodeSurge(proxys, groups, sqlconfig.Surge)
 }
@@ -151,6 +158,27 @@ func DecodeSurge(proxys, groups []string, file string) (string, error) {
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(surge), "\r\n", "\n"), "\n")
+	reserved := map[string]bool{"DIRECT": true, "REJECT": true}
+	currentSection := ""
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			currentSection = trimmed
+			continue
+		}
+		if (currentSection == "[Proxy]" || currentSection == "[Proxy Group]") && !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, ";") {
+			if name, _, ok := strings.Cut(trimmed, "="); ok {
+				reserved[strings.TrimSpace(name)] = true
+			}
+		}
+	}
+	for i, name := range groups {
+		renamed := uniqueName(name, reserved)
+		if i < len(proxys) {
+			proxys[i] = strings.Replace(proxys[i], name+" =", renamed+" =", 1)
+		}
+		groups[i] = renamed
+	}
 	var output []string
 	section := ""
 	foundProxy, foundGroup := false, false

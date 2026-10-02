@@ -16,7 +16,7 @@ import (
 func GetIp(c *gin.Context) {
 	c.Next()
 	func() {
-		subname, valid := c.Get("subname")
+		subscriptionID, valid := c.Get("subscription_id")
 		if !valid || c.Writer.Status() != 200 {
 			return
 		}
@@ -40,17 +40,12 @@ func GetIp(c *gin.Context) {
 			return
 		}
 
-		var sub models.Subcription
-		if subnameStr, ok := subname.(string); ok {
-			sub.Name = subnameStr
-		} else {
-			log.Println("无法获取订阅名称")
+		id, ok := subscriptionID.(int)
+		if !ok || id <= 0 {
 			return
 		}
-
-		err = sub.Find() // 查找订阅以获取 SubcriptionID
-		if err != nil {
-			log.Println("查找订阅失败:", err)
+		sub := models.Subcription{ID: id}
+		if err := sub.Find(); err != nil {
 			return
 		}
 

@@ -62,7 +62,7 @@ func subscriptionURLs(c *gin.Context) (*models.Subcription, []string, error) {
 	defer cancel()
 	var links []string
 	for _, entry := range sub.Nodes {
-		for _, link := range strings.Split(entry.Link, ",") {
+		for _, link := range node.SplitLinks(entry.Link) {
 			link = strings.TrimSpace(link)
 			if link == "" {
 				continue
@@ -72,16 +72,15 @@ func subscriptionURLs(c *gin.Context) (*models.Subcription, []string, error) {
 				if err != nil {
 					return nil, nil, err
 				}
-				decoded := node.Base64Decode(strings.TrimSpace(string(body)))
-				if decoded == "" {
-					return nil, nil, fmt.Errorf("远程订阅格式无效")
+				remote, err := node.DecodeSubscription(string(body))
+				if err != nil {
+					return nil, nil, err
 				}
-				for _, remote := range strings.Split(decoded, "\n") {
-					if remote = strings.TrimSpace(remote); remote != "" {
-						links = append(links, remote)
-					}
-				}
+				links = append(links, remote...)
 			} else {
+				if _, err := node.NodeName(link); err != nil {
+					return nil, nil, err
+				}
 				links = append(links, link)
 			}
 		}
@@ -144,12 +143,19 @@ func GetSurge(c *gin.Context) {
 		return
 	}
 	if !strings.Contains(result, "#!MANAGED-CONFIG") {
-		scheme := "http"
-		if c.Request.TLS != nil {
-			scheme = "https"
-		}
+		scheme := requestScheme(c)
 		result = fmt.Sprintf("#!MANAGED-CONFIG %s://%s%s interval=86400 strict=false\n%s",
 			scheme, c.Request.Host, c.Request.URL.RequestURI(), result)
 	}
 	sendSubscription(c, sub, "conf", result)
+}
+
+func requestScheme(c *gin.Context) string {
+	if c.Request.TLS != nil {
+		return "https"
+	}
+	if value := strings.ToLower(strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Proto"), ",")[0])); value == "https" {
+		return "https"
+	}
+	return "http"
 }

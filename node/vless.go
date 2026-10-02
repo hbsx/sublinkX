@@ -88,7 +88,7 @@ func EncodeVLESSURL(v VLESS) string {
 	}
 	u.RawQuery = q.Encode()
 	// 如果没有name则用服务器加端口
-	if v.Name != "" {
+	if v.Name == "" {
 		u.Fragment = v.Server + ":" + strconv.Itoa(v.Port)
 	}
 	return u.String()
@@ -100,10 +100,17 @@ func DecodeVLESSURL(s string) (VLESS, error) {
 		base64(username@host:port?encryption=none&security=auto&type=tcp)
 	*/
 	// 解析base64然后重新url编码
-	if !strings.Contains(s, "vless://") {
+	if !strings.HasPrefix(s, "vless://") {
 		return VLESS{}, fmt.Errorf("非vless协议: %s", s)
 	}
-	s = "vless://" + Base64Decode(strings.Split(s, "://")[1])
+	payload := strings.TrimPrefix(s, "vless://")
+	if !strings.Contains(payload, "@") {
+		decoded, err := decodeBase64(payload)
+		if err != nil {
+			return VLESS{}, err
+		}
+		s = "vless://" + decoded
+	}
 	// 解析url
 	u, err := url.Parse(s)
 	if err != nil {
@@ -111,7 +118,10 @@ func DecodeVLESSURL(s string) (VLESS, error) {
 	}
 	uuid := u.User.Username()
 	hostname := u.Hostname()
-	port, _ := strconv.Atoi(u.Port())
+	if err := validateEndpoint(u, true); err != nil {
+		return VLESS{}, err
+	}
+	port, _ := validPort(u.Port())
 	encryption := u.Query().Get("encryption")
 	security := u.Query().Get("security")
 	types := u.Query().Get("type")

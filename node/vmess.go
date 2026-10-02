@@ -3,7 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"strconv"
 	"strings"
 )
 
@@ -46,7 +46,7 @@ func CallVmessURL() {
 func EncodeVmessURL(v Vmess) string {
 	// 如果备注为空，则使用服务器地址+端口
 	if v.Ps == "" {
-		v.Ps = v.Add + ":" + v.Port.(string)
+		v.Ps = fmt.Sprintf("%s:%v", v.Add, v.Port)
 	}
 	// 如果版本为空，则默认为2
 	if v.V == "" {
@@ -58,24 +58,29 @@ func EncodeVmessURL(v Vmess) string {
 
 // vmess 解码
 func DecodeVMESSURL(s string) (Vmess, error) {
-	if !strings.Contains(s, "vmess://") {
-		return Vmess{}, fmt.Errorf("非vmess协议:%s", s)
+	if !strings.HasPrefix(s, "vmess://") {
+		return Vmess{}, fmt.Errorf("非 VMess 协议")
 	}
-	param := strings.Split(s, "://")[1]
-	param = Base64Decode(strings.TrimSpace(param))
-	// fmt.Println(param)
-	var vmess Vmess
-	err := json.Unmarshal([]byte(param), &vmess)
+	param, err := decodeBase64(strings.TrimPrefix(s, "vmess://"))
 	if err != nil {
-		log.Println(err)
-		return Vmess{}, fmt.Errorf("json格式化失败:%s", param)
+		return Vmess{}, err
 	}
+	var vmess Vmess
+	err = json.Unmarshal([]byte(param), &vmess)
+	if err != nil {
+		return Vmess{}, fmt.Errorf("VMess JSON 无效")
+	}
+	port, err := convertToInt(vmess.Port)
+	if err != nil || port < 1 || port > 65535 || vmess.Add == "" || vmess.Id == "" {
+		return Vmess{}, fmt.Errorf("VMess 服务器、端口或认证信息无效")
+	}
+	vmess.Port = strconv.Itoa(port)
 	if vmess.Scy == "" {
 		vmess.Scy = "auto"
 	}
 	// 如果备注为空，则使用服务器地址+端口
 	if vmess.Ps == "" {
-		vmess.Ps = vmess.Add + ":" + vmess.Port.(string)
+		vmess.Ps = fmt.Sprintf("%s:%d", vmess.Add, port)
 	}
 	return vmess, nil
 }

@@ -32,7 +32,7 @@ var embeddedFiles embed.FS
 var Template embed.FS
 
 // 版本号
-var version string
+const version = "2.1.3"
 
 func Templateinit() {
 	// 设置template路径
@@ -73,7 +73,6 @@ func Templateinit() {
 func main() {
 	// 获取版本号
 	var Isversion bool
-	version = "2.1.2"
 	flag.BoolVar(&Isversion, "version", false, "显示版本号")
 	flag.Parse()
 	if Isversion {
@@ -160,7 +159,7 @@ func Run(port int) {
 	r := gin.New()
 	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s %d %s %s %s\n", p.TimeStamp.Format(time.RFC3339), p.StatusCode, p.Method, strings.SplitN(p.Path, "?", 2)[0], p.Latency)
-	}), gin.Recovery())
+	}), middlewares.SafeRecovery(nil))
 	// 初始化日志配置
 	utils.Loginit()
 	// 初始化模板

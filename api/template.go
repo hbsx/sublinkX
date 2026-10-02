@@ -1,11 +1,13 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sublink/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -91,6 +93,11 @@ func safeFilePath(filename string) (string, error) {
 		return "", errors.New("文件名无效或指向根目录本身")
 	}
 
+	if info, err := os.Lstat(finalCleanPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("模板不能为符号链接")
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
 	return finalCleanPath, nil
 }
 
@@ -202,6 +209,10 @@ func UpdateTemp(c *gin.Context) {
 
 	// 如果新旧文件名不同，则检查新文件是否已存在
 	if oldFullPath != newFullPath {
+		if inUse, err := templateInUse(oldFullPath); err != nil || inUse {
+			c.JSON(409, gin.H{"msg": "模板正在被订阅使用，请先更换订阅模板再改名"})
+			return
+		}
 		if _, err := os.Stat(newFullPath); err == nil {
 			c.JSON(400, gin.H{
 				"msg": "新文件名已存在，请选择其他名称",
@@ -339,6 +350,10 @@ func DelTemp(c *gin.Context) {
 	}
 
 	// 删除文件
+	if inUse, err := templateInUse(fullPath); err != nil || inUse {
+		c.JSON(409, gin.H{"msg": "模板正在被订阅使用，请先更换订阅模板再删除"})
+		return
+	}
 	err = os.Remove(fullPath)
 	if err != nil {
 		log.Println("删除文件失败:", err)
@@ -352,4 +367,33 @@ func DelTemp(c *gin.Context) {
 		"code": "00000",
 		"msg":  "删除成功",
 	})
+}
+
+func templateInUse(path string) (bool, error) {
+	if models.DB == nil {
+		return false, errors.New("数据库未初始化")
+	}
+	var subs []models.Subcription
+	if err := models.DB.Find(&subs).Error; err != nil {
+		return false, err
+	}
+	for _, sub := range subs {
+		var config models.SubscriptionConfig
+		if json.Unmarshal([]byte(sub.Config), &config) != nil {
+			return false, errors.New("订阅配置无效")
+		}
+		for _, file := range []string{config.Clash, config.Surge} {
+			if file == "" || strings.Contains(file, "://") {
+				continue
+			}
+			absolute, err := filepath.Abs(file)
+			if err != nil {
+				return false, err
+			}
+			if absolute == path {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

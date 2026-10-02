@@ -36,7 +36,7 @@ func TestVersionAndHealthcheckDoNotCreateFiles(t *testing.T) {
 	command := exec.Command(output, "--version")
 	command.Dir = directory
 	result, err := command.CombinedOutput()
-	if err != nil || strings.TrimSpace(string(result)) != "2.1.2" {
+	if err != nil || strings.TrimSpace(string(result)) != version {
 		t.Fatalf("%s: %v", result, err)
 	}
 	command = exec.Command(output, "healthcheck")

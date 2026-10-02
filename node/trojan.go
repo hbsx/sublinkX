@@ -101,7 +101,10 @@ func DecodeTrojanURL(s string) (Trojan, error) {
 	}
 	password := u.User.Username()
 	hostname := u.Hostname()
-	port, _ := strconv.Atoi(u.Port())
+	if err := validateEndpoint(u, true); err != nil {
+		return Trojan{}, err
+	}
+	port, _ := validPort(u.Port())
 	peer := u.Query().Get("peer")
 	sni := u.Query().Get("sni")
 	types := u.Query().Get("type")
@@ -125,16 +128,21 @@ func DecodeTrojanURL(s string) (Trojan, error) {
 		Hostname: hostname,
 		Port:     port,
 		Query: TrojanQuery{
-			Peer:          peer,
-			Type:          types,
-			Path:          path,
-			Security:      security,
-			Fp:            fp,
-			AllowInsecure: 0,
-			Alpn:          alpn,
-			Sni:           sni,
-			Host:          host,
-			Flow:          flow,
+			Peer:     peer,
+			Type:     types,
+			Path:     path,
+			Security: security,
+			Fp:       fp,
+			AllowInsecure: func() int {
+				if queryBool(u.Query().Get("allowInsecure")) {
+					return 1
+				}
+				return 0
+			}(),
+			Alpn: alpn,
+			Sni:  sni,
+			Host: host,
+			Flow: flow,
 		},
 		Name: name,
 		Type: "trojan",

@@ -1,183 +1,186 @@
 package models
 
 import (
-	// 用于将配置解析为结构体
-	"strings" // 用于处理逗号分隔的字符串
-
+	"encoding/json"
+	"fmt"
 	"gorm.io/gorm"
+	"strings"
 )
 
-// Subcription 结构体
 type Subcription struct {
 	gorm.Model
 	ID        int
 	Name      string
 	Token     string    `gorm:"uniqueIndex"`
-	Config    string    `gorm:"type:text"` // Config 存储为 JSON 字符串
+	Config    string    `gorm:"type:text"`
 	NodeOrder string    `gorm:"type:text"`
 	Nodes     []Node    `gorm:"many2many:subcription_nodes;"`
 	SubLogs   []SubLogs `gorm:"foreignKey:SubcriptionID;"`
 }
-
-// Config 结构体，用于解析 Subcription.Config 字段的 JSON 内容
-// 命名为 SubscriptionConfig 以避免与其他可能的 Config 冲突
-type SubscriptionConfig struct { // <--- 这里重命名了
+type SubscriptionConfig struct {
 	Clash string `json:"clash"`
 	Surge string `json:"surge"`
 	UDP   bool   `json:"udp"`
 	Cert  bool   `json:"cert"`
 }
 
-// Add 添加订阅
+func nodeOrder(nodes []Node) string {
+	ids := []int{}
+	seen := map[int]bool{}
+	for _, n := range nodes {
+		if !seen[n.ID] {
+			ids = append(ids, n.ID)
+			seen[n.ID] = true
+		}
+	}
+	data, _ := json.Marshal(ids)
+	return string(data)
+}
+
+// Fall back to all remaining associations when migrating stale legacy names.
+func (sub *Subcription) sortNodes() {
+	var ids []int
+	byID := map[int]Node{}
+	for _, n := range sub.Nodes {
+		byID[n.ID] = n
+	}
+	ordered := []Node{}
+	seen := map[int]bool{}
+	appendNode := func(n Node) {
+		if !seen[n.ID] {
+			ordered = append(ordered, n)
+			seen[n.ID] = true
+		}
+	}
+	if json.Unmarshal([]byte(sub.NodeOrder), &ids) == nil {
+		for _, id := range ids {
+			if n, ok := byID[id]; ok {
+				appendNode(n)
+			}
+		}
+	} else {
+		for _, name := range strings.Split(sub.NodeOrder, ",") {
+			for _, n := range sub.Nodes {
+				if n.Name == strings.TrimSpace(name) {
+					appendNode(n)
+				}
+			}
+		}
+	}
+	for _, n := range sub.Nodes {
+		appendNode(n)
+	}
+	sub.Nodes = ordered
+}
+func subscriptionQuery(tx *gorm.DB, id int, name string) (*gorm.DB, error) {
+	if id > 0 {
+		return tx.Where("id = ?", id), nil
+	}
+	if name == "" {
+		return nil, fmt.Errorf("订阅 ID 无效")
+	}
+	var count int64
+	if err := tx.Model(&Subcription{}).Where("name = ?", name).Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count != 1 {
+		return nil, fmt.Errorf("订阅不存在或同名，请按 ID 操作")
+	}
+	return tx.Where("name = ?", name), nil
+}
 func (sub *Subcription) Add() error {
 	var err error
 	sub.Token, err = RandomToken()
 	if err != nil {
 		return err
 	}
-	// 在创建订阅时，如果 sub.Nodes 已经被前端填充并排序，可以将其名称转换为 NodeOrder 字符串
-	if len(sub.Nodes) > 0 {
-		names := make([]string, len(sub.Nodes))
-		for i, node := range sub.Nodes {
-			names[i] = node.Name
+	sub.NodeOrder = nodeOrder(sub.Nodes)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Nodes", "SubLogs").Create(sub).Error; err != nil {
+			return err
 		}
-		sub.NodeOrder = strings.Join(names, ",")
-	}
-
-	// 首先创建 Subcription 记录，不包括多对多关系
-	if err := DB.Create(sub).Error; err != nil {
-		return err
-	}
-	// 然后建立多对多关系
-
-	// log.Println("Adding subscription nodes:", sub.Nodes)
-	return DB.Model(sub).Association("Nodes").Append(sub.Nodes)
+		return tx.Model(sub).Omit("Nodes.*").Association("Nodes").Replace(sub.Nodes)
+	})
 }
-
-// Update 更新订阅
-func (sub *Subcription) Update(NewName *Subcription) error {
-	// 查找现有订阅
-	var existingSub Subcription
-	if err := DB.Where("id = ? or name = ?", sub.ID, sub.Name).First(&existingSub).Error; err != nil {
-		return err // 订阅不存在
-	}
-
-	// 更新非多对多字段，包括 NodeOrder
-	existingSub.Name = NewName.Name // 新名称
-	existingSub.Config = NewName.Config
-
-	// 更新 NodeOrder 字段
-	if len(NewName.Nodes) > 0 {
-		names := make([]string, len(NewName.Nodes))
-		for i, node := range NewName.Nodes {
-			names[i] = node.Name
+func (sub *Subcription) Update(next *Subcription) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		q, err := subscriptionQuery(tx, sub.ID, sub.Name)
+		if err != nil {
+			return err
 		}
-		existingSub.NodeOrder = strings.Join(names, ",")
-	} else {
-		existingSub.NodeOrder = "" // 如果没有节点，清空
-	}
-
-	// 保存更新
-	if err := DB.Save(&existingSub).Error; err != nil {
-		return err
-	}
-
-	// 更新多对多关系: Replace 会清除旧关联并建立新关联
-	// 确保 sub.Nodes 包含了新的排序后的节点对象
-	return DB.Model(&existingSub).Association("Nodes").Replace(NewName.Nodes)
+		var existing Subcription
+		if err = q.First(&existing).Error; err != nil {
+			return err
+		}
+		if err = tx.Model(&existing).Updates(map[string]interface{}{"name": next.Name, "config": next.Config, "node_order": nodeOrder(next.Nodes)}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&existing).Omit("Nodes.*").Association("Nodes").Replace(next.Nodes)
+	})
 }
-
-// Find 查找订阅 (通常用于获取单个订阅的详细信息，包括其关联节点和日志)
 func (sub *Subcription) Find() error {
-	// 使用 Preload 加载 Nodes 和 SubLogs 关联数据
-	if err := DB.Preload("Nodes").Preload("SubLogs").Where("id = ? or name = ?", sub.ID, sub.Name).First(sub).Error; err != nil {
+	q, err := subscriptionQuery(DB, sub.ID, sub.Name)
+	if err != nil {
 		return err
 	}
-	// 根据 NodeOrder 字段重新排序 Nodes
-	if sub.NodeOrder != "" && len(sub.Nodes) > 0 {
-		orderedNames := strings.Split(sub.NodeOrder, ",")
-		nodeMap := make(map[string]Node)
-		for _, node := range sub.Nodes {
-			nodeMap[node.Name] = node
-		}
-
-		var reorderedNodes []Node
-		for _, name := range orderedNames {
-			trimmedName := strings.TrimSpace(name)
-			if node, ok := nodeMap[trimmedName]; ok {
-				reorderedNodes = append(reorderedNodes, node)
-			}
-		}
-		sub.Nodes = reorderedNodes
+	if err = q.Preload("Nodes").Preload("SubLogs").First(sub).Error; err != nil {
+		return err
 	}
-
+	sub.sortNodes()
 	return nil
 }
-
-// List 订阅列表 (返回所有订阅，并加载其关联节点和日志，按指定顺序)
-func (sub *Subcription) List() ([]Subcription, error) {
-	var subs []Subcription
-	err := DB.Preload("Nodes").Preload("SubLogs").Find(&subs).Error // 预加载所有关联
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range subs {
-		// 根据 NodeOrder 字段重新排序每个订阅的 Nodes
-		if subs[i].NodeOrder != "" && len(subs[i].Nodes) > 0 {
-			orderedNames := strings.Split(subs[i].NodeOrder, ",")
-			nodeMap := make(map[string]Node) // 用于快速查找节点对象
-			for _, node := range subs[i].Nodes {
-				nodeMap[node.Name] = node
-			}
-
-			var reorderedNodes []Node
-			for _, name := range orderedNames {
-				trimmedName := strings.TrimSpace(name)
-				if node, ok := nodeMap[trimmedName]; ok {
-					reorderedNodes = append(reorderedNodes, node)
-				}
-			}
-			subs[i].Nodes = reorderedNodes
-		}
-	}
-	return subs, nil
-}
-
-// IPlogUpdate 更新订阅日志 (与节点排序无关，保持不变)
-func (sub *Subcription) IPlogUpdate() error {
-	return DB.Model(sub).Association("SubLogs").Replace(&sub.SubLogs)
-}
-
-// Del 删除订阅 (与节点排序无关，保持不变)
-func (sub *Subcription) Del() error {
-	// 清除多对多关系
-	err := DB.Model(sub).Association("Nodes").Clear()
-	if err != nil {
-		return err
-	}
-	// 删除主记录，由于 SubLogs 使用 foreignKey，理论上 GORM 应该能级联删除子记录。
-	// 但为了确保，你也可以显式删除 SubLogs:
-	// DB.Where("subcription_id = ?", sub.ID).Delete(&SubLogs{})
-	return DB.Delete(sub).Error
-}
-
 func (sub *Subcription) FindByToken(token string) error {
 	if err := DB.Preload("Nodes").Where("token = ?", token).First(sub).Error; err != nil {
 		return err
 	}
-	if sub.NodeOrder != "" {
-		byName := make(map[string]Node)
-		for _, entry := range sub.Nodes {
-			byName[entry.Name] = entry
+	sub.sortNodes()
+	return nil
+}
+func (sub *Subcription) List() ([]Subcription, error) {
+	subs := []Subcription{}
+	if err := DB.Preload("Nodes").Preload("SubLogs").Find(&subs).Error; err != nil {
+		return nil, err
+	}
+	for i := range subs {
+		subs[i].sortNodes()
+	}
+	return subs, nil
+}
+func (sub *Subcription) IPlogUpdate() error {
+	return DB.Model(sub).Association("SubLogs").Replace(sub.SubLogs)
+}
+func (sub *Subcription) Del() error {
+	if sub.ID <= 0 {
+		return fmt.Errorf("订阅 ID 无效")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&Subcription{}, sub.ID).Error; err != nil {
+			return err
 		}
-		var ordered []Node
-		for _, name := range strings.Split(sub.NodeOrder, ",") {
-			if entry, ok := byName[strings.TrimSpace(name)]; ok {
-				ordered = append(ordered, entry)
+		if err := tx.Model(sub).Association("Nodes").Clear(); err != nil {
+			return err
+		}
+		if err := tx.Where("subcription_id = ?", sub.ID).Delete(&SubLogs{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(sub).Error
+	})
+}
+func MigrateSubscriptionOrder(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		var subs []Subcription
+		if err := tx.Preload("Nodes").Find(&subs).Error; err != nil {
+			return err
+		}
+		for _, sub := range subs {
+			sub.sortNodes()
+			order := nodeOrder(sub.Nodes)
+			if order != sub.NodeOrder {
+				if err := tx.Model(&Subcription{}).Where("id = ?", sub.ID).Update("node_order", order).Error; err != nil {
+					return err
+				}
 			}
 		}
-		sub.Nodes = ordered
-	}
-	return nil
+		return nil
+	})
 }

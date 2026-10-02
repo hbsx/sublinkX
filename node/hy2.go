@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -78,9 +79,18 @@ func DecodeHY2URL(s string) (HY2, error) {
 	if u.Scheme != "hy2" && u.Scheme != "hysteria2" {
 		return HY2{}, fmt.Errorf("非hy2协议: %s", s)
 	}
-	password := u.User.Username()
 	server := u.Hostname()
-	port, _ := strconv.Atoi(u.Port())
+	if server != "" && u.Port() == "" {
+		u.Host = net.JoinHostPort(server, "443")
+	}
+	if err := validateEndpoint(u, false); err != nil {
+		return HY2{}, err
+	}
+	password := u.User.Username()
+	if suffix, ok := u.User.Password(); ok {
+		password += ":" + suffix
+	}
+	port, _ := validPort(u.Port())
 	insecure, _ := strconv.Atoi(u.Query().Get("insecure"))
 	auth := u.Query().Get("auth")
 	upMbps, _ := strconv.Atoi(u.Query().Get("upmbps"))
