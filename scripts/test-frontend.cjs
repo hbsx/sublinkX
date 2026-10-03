@@ -34,3 +34,30 @@ test('Batch input preserves ALPN comma and saves source type',async()=>{
   vm.createContext(context);vm.runInContext(source,context);await vm.runInContext('SubmitNodeForm();',context);
   assert.equal(posted.length,2);assert.equal(posted[0].link,valid);assert.equal(posted[0].source_type,'proxy');
 });
+
+
+test('Node JSON export preserves metadata but excludes IDs and subscriptions',()=>{
+  const source=section('nodes.vue','function exportNodeFile()','async function previewNodeFile');
+  let file, downloaded;
+  const selected={ID:77,Name:'Custom',Link:'https://example.test/secret',SourceType:'proxy',GroupNodes:[{ID:9,Name:'Group'}],Subscriptions:['private']};
+  const context={exportScope:{value:'selected'},exportFormat:{value:'json'},multipleSelection:{value:[selected]},tableDataTemp:{value:[{Name:'Other'}]},exportDialog:{value:true},Blob,URL:{createObjectURL(blob){file=blob;return 'blob:test'},revokeObjectURL(){}},Date,setTimeout(){},document:{createElement(){return {click(){downloaded=this.download},remove(){}}},body:{appendChild(){}}},ElMessage:{warning(){assert.fail('Unexpected export rejection')}}};
+  vm.createContext(context);vm.runInContext(source+'\nexportNodeFile();',context);
+  return file.text().then(text=>{
+    const backup=JSON.parse(text);
+    assert.deepEqual(backup,{format:'sublinkx-nodes',version:1,nodes:[{name:'Custom',link:'https://example.test/secret',source_type:'proxy',groups:['Group']}]});
+    assert.match(downloaded,/\.json$/);
+    assert.equal(context.exportDialog.value,false);
+  });
+});
+
+test('Import file selection only previews and clears input for retry',async()=>{
+  const source=section('nodes.vue','async function previewNodeFile','async function confirmNodeImport');
+  const requests=[];
+  const context={importBusy:{value:false},importPayload:{value:null},importPreview:{value:null},importDialog:{value:false},importNodes:async payload=>{requests.push(payload);return {data:{valid:1,skipped:0,invalid:0,rows:[]}}},ElMessage:{warning(){assert.fail()},error(){assert.fail()}}};
+  vm.createContext(context);vm.runInContext(source,context);
+  const input={value:'backup.json',files:[{name:'backup.json',size:20,text:async()=>'{"nodes":[]}'}]};
+  context.event={target:input};
+  await vm.runInContext('previewNodeFile(event);',context);
+  assert.equal(requests.length,1);assert.equal(requests[0].confirm,false);
+  assert.equal(input.value,'');assert.equal(context.importDialog.value,true);
+});

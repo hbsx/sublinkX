@@ -1,6 +1,6 @@
 <script setup lang='ts'>
 import { ref,onMounted,nextTick  } from 'vue'
-import {getNodes,AddNodes,DelNode,UpdateNode,GetGroup,SetGroup} from "@/api/subcription/node"
+import {getNodes,AddNodes,DelNode,UpdateNode,GetGroup,SetGroup,importNodes} from "@/api/subcription/node"
 import type { TableInstance } from 'element-plus'
 
 interface GroupNode {
@@ -25,6 +25,79 @@ interface NodeInfo {
     SourceType?: string
     GroupName?: string[] // 分组名称
 }
+// Node transfer keeps subscription configuration on the destination untouched.
+const importFileInput = ref<HTMLInputElement | null>(null);
+const importDialog = ref(false);
+const importBusy = ref(false);
+const importPayload = ref<{ format: string; content: string } | null>(null);
+interface ImportPreviewRow { index: number; name: string; status: string; reason: string }
+const importPreview = ref<{ rows: ImportPreviewRow[]; valid: number; skipped: number; invalid: number } | null>(null);
+const exportDialog = ref(false);
+const exportScope = ref<'all' | 'selected'>('all');
+const exportFormat = ref<'json' | 'txt'>('json');
+
+function exportNodeFile() {
+  const records = exportScope.value === 'selected' ? multipleSelection.value : tableDataTemp.value;
+  if (!records.length) { ElMessage.warning('没有可导出的节点'); return; }
+  if (records.length > 5000) { ElMessage.warning('每次最多导出 5000 条，请分批选中导出'); return; }
+  const text = exportFormat.value === 'json'
+    ? JSON.stringify({ format: 'sublinkx-nodes', version: 1, nodes: records.map(n => ({
+      name: n.Name, link: n.Link, source_type: n.SourceType || 'auto',
+      groups: (n.GroupNodes || []).map(g => g.Name),
+    })) }, null, 2)
+    : records.map(n => n.Link).join('\n');
+  const blob = new Blob([text], { type: exportFormat.value === 'json' ? 'application/json;charset=utf-8' : 'text/plain;charset=utf-8' });
+  if (blob.size > 5 * 1024 * 1024) { ElMessage.warning('文件超过 5 MB，请分批选中导出'); return; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sublinkx-nodes-${new Date().toISOString().slice(0, 10)}.${exportFormat.value}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  exportDialog.value = false;
+}
+
+async function previewNodeFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || importBusy.value) return;
+  importPayload.value = null;
+  importPreview.value = null;
+  if (file.size > 5 * 1024 * 1024) { ElMessage.warning('文件不能超过 5 MB'); return; }
+  const format = file.name.split('.').pop()?.toLowerCase();
+  if (format !== 'json' && format !== 'txt') { ElMessage.warning('请选择 JSON 或 TXT 文件'); return; }
+  importBusy.value = true;
+  try {
+    const payload = { format, content: await file.text() };
+    const { data } = await importNodes({ ...payload, confirm: false });
+    importPayload.value = payload;
+    importPreview.value = data;
+    importDialog.value = true;
+  } catch { ElMessage.error('无法预览，请检查文件内容和错误提示'); }
+  finally { importBusy.value = false; }
+}
+
+async function confirmNodeImport() {
+  if (!importPayload.value || !importPreview.value || importPreview.value.invalid || importBusy.value) return;
+  importBusy.value = true;
+  try {
+    const { data } = await importNodes({ ...importPayload.value, confirm: true });
+    importDialog.value = false;
+    importPayload.value = null;
+    importPreview.value = null;
+    ElMessage.success(`导入完成：新增 ${data.added} 条，跳过重复 ${data.skipped} 条`);
+    await getnodes();
+    await GetGroups();
+    activeName.value = '全部';
+    multipleSelection.value = [];
+    multipleTable.value?.clearSelection();
+  } catch { ElMessage.error('导入未完成，请检查错误提示'); }
+  finally { importBusy.value = false; }
+}
+
 onMounted(async() => {  // 页面开始执行函数
    getnodes()
    GetGroups()
@@ -461,6 +534,38 @@ watch(activeName, (newVal) => {
 </el-dialog>
 
 
+  <el-dialog v-model="exportDialog" title="导出节点" width="520px">
+    <p>JSON 保留名称、链接类型和分组；TXT 只保留链接。文件包含节点密码或订阅令牌，请妥善保管。</p>
+    <el-radio-group v-model="exportScope">
+      <el-radio label="all">全部节点</el-radio>
+      <el-radio label="selected">选中的节点（{{ multipleSelection.length }}）</el-radio>
+    </el-radio-group>
+    <div style="margin-top:16px">
+      <el-radio-group v-model="exportFormat">
+        <el-radio label="json">JSON 备份</el-radio>
+        <el-radio label="txt">TXT 链接</el-radio>
+      </el-radio-group>
+    </div>
+    <template #footer><el-button @click="exportDialog = false">取消</el-button><el-button type="primary" @click="exportNodeFile">下载文件</el-button></template>
+  </el-dialog>
+  <el-dialog v-model="importDialog" title="导入预览" width="760px" :close-on-click-modal="!importBusy" :close-on-press-escape="!importBusy" :show-close="!importBusy">
+    <template v-if="importPreview">
+      <p>待新增 {{ importPreview.valid }} 条，重复 {{ importPreview.skipped }} 条，无效 {{ importPreview.invalid }} 条。预览尚未保存。</p>
+      <p>按链接和链接类型跳过重复记录，保留原有名称和分组。只迁移节点，不迁移订阅配置。</p>
+      <el-alert v-if="importPreview.invalid" title="请修正无效记录后重新选择文件；本次不会保存任何节点。" type="error" :closable="false" />
+      <el-table :data="importPreview.rows" max-height="380">
+        <el-table-column prop="index" label="序号" width="70" />
+        <el-table-column prop="name" label="名称" show-overflow-tooltip />
+        <el-table-column label="状态" width="100"><template #default="{ row }">{{ row.status === 'ready' ? '待新增' : row.status === 'duplicate' ? '重复' : '无效' }}</template></el-table-column>
+        <el-table-column prop="reason" label="说明" show-overflow-tooltip />
+      </el-table>
+    </template>
+    <template #footer>
+      <el-button :disabled="importBusy" @click="importDialog = false; importPayload = null; importPreview = null">取消</el-button>
+      <el-button type="primary" :loading="importBusy" :disabled="!importPreview || importPreview.invalid > 0 || importPreview.valid === 0" @click="confirmNodeImport">确认导入</el-button>
+    </template>
+  </el-dialog>
+
   <!-- 显示表格数据 -->
   <el-card>
     <el-tabs v-model="activeName" >
@@ -468,6 +573,9 @@ watch(activeName, (newVal) => {
       <el-tab-pane :label="item" :name="item" v-for="item in allGroupNames" :key="item" />
     </el-tabs>
       <el-button type="primary" @click="handleAddNode">添加节点</el-button>
+      <el-button :loading="importBusy" @click="importFileInput?.click()">导入节点</el-button>
+      <el-button @click="exportDialog = true">导出节点</el-button>
+      <input ref="importFileInput" type="file" accept=".json,.txt" style="display:none" @change="previewNodeFile" />
       <div style="margin-bottom: 10px"></div>
       <el-table
       ref="multipleTable"

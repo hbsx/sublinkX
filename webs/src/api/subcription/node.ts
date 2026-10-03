@@ -60,3 +60,7 @@ export function DelGroup(data: any){
     params: data,
   });
 }
+// Preview and commit both use the authenticated API.
+export function importNodes(data: { format: string; content: string; confirm: boolean }) {
+  return request({ url: "/api/v1/nodes/import", method: "post", data });
+}

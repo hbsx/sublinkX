@@ -11,3 +11,6 @@ sublink.exe
 webs/node_modules
 webs/dist
 SHA256SUMS
+
+# Local verification cache
+.cache/
