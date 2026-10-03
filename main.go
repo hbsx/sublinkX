@@ -32,7 +32,7 @@ var embeddedFiles embed.FS
 var Template embed.FS
 
 // 版本号
-const version = "2.1.3"
+const version = "2.1.4"
 
 func Templateinit() {
 	// 设置template路径

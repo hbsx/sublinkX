@@ -53,6 +53,12 @@ Actual availability also depends on the receiving client's version. Unsupported 
 
 ## Release notes
 
+### [2.1.4](https://github.com/hbsx/sublinkX/releases/tag/2.1.4) · 2026-10-03
+
+Adds JSON/TXT node import and export, selected/all-node export, import preview, duplicate skipping and transactional rollback. JSON preserves names, links, source types and groups. Subscription configurations, templates and system settings are not migrated. Limits: 5,000 records and 5 MB per file.
+
+**Upgrade:** back up data and recreate the container with `ghcr.io/hbsx/sublinkx:2.1.4`, retaining existing mounts and login credentials. Refresh the dashboard. Upgrading from 2.1.3 preserves subscription configurations.
+
 ### [2.1.3](https://github.com/hbsx/sublinkX/releases/tag/2.1.3) · 2026-10-02
 
 - Reject invalid deletion IDs; update nodes and groups atomically.
