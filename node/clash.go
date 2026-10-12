@@ -44,9 +44,9 @@ type Proxy struct {
 	Protocol           string                 `yaml:"protocol,omitempty"`
 	Uuid               string                 `yaml:"uuid,omitempty"`
 	Peer               string                 `yaml:"peer,omitempty"`
-	Congestion_control string                 `yaml:"congestion_control,omitempty"`
-	Udp_relay_mode     string                 `yaml:"udp_relay_mode,omitempty"`
-	Disable_sni        bool                   `yaml:"disable_sni,omitempty"`
+	Congestion_control string                 `yaml:"congestion-controller,omitempty"`
+	Udp_relay_mode     string                 `yaml:"udp-relay-mode,omitempty"`
+	Disable_sni        bool                   `yaml:"disable-sni,omitempty"`
 }
 
 type ProxyGroup struct {
@@ -397,7 +397,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Disable_sni:        disable_sni,
 				Sni:                tuic.Sni,
 				Udp:                sqlconfig.Udp,
-				Skip_cert_verify:   sqlconfig.Cert,
+				Skip_cert_verify:   sqlconfig.Cert || tuic.SkipCertVerify,
 			}
 			proxys = append(proxys, tuicproxy)
 		}

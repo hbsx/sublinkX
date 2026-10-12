@@ -128,7 +128,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 				"port":             tuic.Port,
 				"password":         tuic.Password,
 				"udp":              sqlconfig.Udp,
-				"skip-cert-verify": sqlconfig.Cert,
+				"skip-cert-verify": sqlconfig.Cert || tuic.SkipCertVerify,
 			}
 			tuicproxy := fmt.Sprintf("%s = tuic, %s, %d, token=%s, udp-relay=%t, skip-cert-verify=%t",
 				proxy["name"], proxy["server"], proxy["port"], proxy["password"], proxy["udp"], proxy["skip-cert-verify"])
