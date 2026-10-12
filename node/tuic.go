@@ -13,6 +13,7 @@ type Tuic struct {
 	Host               string
 	Port               int
 	Uuid               string
+	SkipCertVerify     bool
 	Congestion_control string
 	Alpn               []string
 	Sni                string
@@ -24,30 +25,47 @@ type Tuic struct {
 func DecodeTuicURL(s string) (Tuic, error) {
 	u, err := url.Parse(s)
 	if err != nil {
-		return Tuic{}, fmt.Errorf("解析失败的URL: %s", s)
+		return Tuic{}, fmt.Errorf("TUIC URL 解析失败")
 	}
 	if u.Scheme != "tuic" {
-		return Tuic{}, fmt.Errorf("非tuic协议: %s", s)
+		return Tuic{}, fmt.Errorf("非 TUIC 协议")
 	}
-
-	uuid := u.User.Username()
-	password, _ := u.User.Password()
-	// log.Println(password)
-	// password = Base64Decode2(password)
-	server := u.Hostname()
 	if err := validateEndpoint(u, true); err != nil {
 		return Tuic{}, err
 	}
+	uuid := u.User.Username()
+	password, hasPassword := u.User.Password()
+	// v2rayN escapes the separator as %3A, leaving both values in Username().
+	if !hasPassword {
+		if id, secret, ok := strings.Cut(uuid, ":"); ok {
+			uuid, password = id, secret
+		}
+	}
+	if uuid == "" || password == "" {
+		return Tuic{}, fmt.Errorf("TUIC 节点缺少 UUID 或密码")
+	}
+	server := u.Hostname()
 	port, _ := validPort(u.Port())
-	Congestioncontrol := u.Query().Get("Congestion_control")
-	alpns := u.Query().Get("alpn")
+	q := u.Query()
+	Congestioncontrol := q.Get("congestion_control")
+	if Congestioncontrol == "" {
+		Congestioncontrol = q.Get("Congestion_control")
+	}
+	alpns := q.Get("alpn")
 	alpn := strings.Split(alpns, ",")
 	if alpns == "" {
 		alpn = nil
 	}
-	sni := u.Query().Get("sni")
-	Udprelay_mode := u.Query().Get("Udp_relay_mode")
-	Disablesni, _ := strconv.Atoi(u.Query().Get("Disable_sni"))
+	sni := q.Get("sni")
+	Udprelay_mode := q.Get("udp_relay_mode")
+	if Udprelay_mode == "" {
+		Udprelay_mode = q.Get("Udp_relay_mode")
+	}
+	disableSNI := q.Get("disable_sni")
+	if disableSNI == "" {
+		disableSNI = q.Get("Disable_sni")
+	}
+	Disablesni, _ := strconv.Atoi(disableSNI)
 	name := u.Fragment
 	// 如果没有设置 Name，则使用 Host:Port 作为 Fragment
 	if name == "" {
@@ -59,6 +77,7 @@ func DecodeTuicURL(s string) (Tuic, error) {
 		Host:               server,
 		Port:               port,
 		Uuid:               uuid,
+		SkipCertVerify:     queryBool(q.Get("allow_insecure")) || queryBool(q.Get("allowInsecure")) || queryBool(q.Get("insecure")),
 		Congestion_control: Congestioncontrol,
 		Alpn:               alpn,
 		Sni:                sni,
