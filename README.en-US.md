@@ -53,6 +53,13 @@ Actual availability also depends on the receiving client's version. Unsupported 
 
 ## Release notes
 
+### [2.1.5](https://github.com/hbsx/sublinkX/releases/tag/2.1.5) · 2026-10-13
+
+- Parse v2rayN TUIC links with `UUID%3Apassword` into separate credentials for Mihomo subscriptions.
+- Map `allow_insecure=1` to per-node `skip-cert-verify: true`, recognize lowercase congestion and UDP relay options, and emit the corresponding Mihomo fields.
+
+**Upgrade:** back up data and recreate the container with `ghcr.io/hbsx/sublinkx:2.1.5`, retaining the existing `db`, `template`, and `logs` mounts and account. Refresh the Mihomo subscription after upgrading. Existing `2.1.4` containers do not receive this fix automatically.
+
 ### [2.1.4](https://github.com/hbsx/sublinkX/releases/tag/2.1.4) · 2026-10-03
 
 Adds JSON/TXT node import and export, selected/all-node export, import preview, duplicate skipping and transactional rollback. JSON preserves names, links, source types and groups. Subscription configurations, templates and system settings are not migrated. Limits: 5,000 records and 5 MB per file.
@@ -192,4 +199,3 @@ Feel free to adjust any details as needed!
 
 ## Stargazers over time
 [![Stargazers over time](https://starchart.cc/gooaclok819/sublinkX.svg?variant=adaptive)](https://starchart.cc/gooaclok819/sublinkX)
-
