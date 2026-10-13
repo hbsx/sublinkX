@@ -65,11 +65,11 @@
 
 ## 更新说明
 
-### 未发布 · 2026-10-12
+### [2.1.5](https://github.com/hbsx/sublinkX/releases/tag/2.1.5) · 2026-10-13
 
 - 修复从 v2rayN 导入的 TUIC 链接：正确拆分 `UUID%3A密码`，避免将整段写入 Mihomo 的 `uuid`。
 - TUIC 链接的 `allow_insecure=1` 按节点输出为 `skip-cert-verify: true`；同时识别小写的拥塞控制与 UDP 转发参数，并使用 Mihomo 对应的配置字段。
-- 此项改动仅在新版本构建并部署后生效；现有容器 `2.1.4` 不受影响。
+**升级：**备份数据后，用 `ghcr.io/hbsx/sublinkx:2.1.5` 重建容器，沿用原有 `db`、`template`、`logs` 挂载与账号，并刷新 Mihomo 订阅。`2.1.4` 容器不会自动获得此修复。
 
 ### [2.1.4](https://github.com/hbsx/sublinkX/releases/tag/2.1.4) · 2026-10-03
 
