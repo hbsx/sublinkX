@@ -122,9 +122,16 @@ func (n *Node) Add() error {
 }
 
 func addNode(tx *gorm.DB, n *Node) error {
-	// 检查节点是否已存在
+	// A manual add can keep a separate label for the same link, but must not
+	// reuse a node with a different link type. Treat legacy empty types as auto.
 	var existingNode Node
-	result := tx.Where("link = ? and name =?", n.Link, n.Name).First(&existingNode)
+	query := tx.Where("link = ? and name = ?", n.Link, n.Name)
+	if sourceKind(n.SourceType) == "auto" {
+		query = query.Where("(source_type = ? or source_type = ?)", "auto", "")
+	} else {
+		query = query.Where("source_type = ?", n.SourceType)
+	}
+	result := query.First(&existingNode)
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return result.Error // 如果查询出错，返回错误
 	}
