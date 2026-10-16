@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('../webs/node_modules/typescript');
+require('./test-frontend-regressions.cjs');
 function section(file,start,end) {
   const source=fs.readFileSync(path.join(__dirname,'../webs/src/views/subcription',file),'utf8');
   const begin=source.indexOf(start),finish=source.indexOf(end,begin);
@@ -21,7 +22,7 @@ test('Editing a different subscription resets security flags and selects node ID
 test('Empty node and group lists clear stale rows',async()=>{
   const nodes=section('nodes.vue','async function getnodes()','async function GetGroups()');
   const groups=section('nodes.vue','async function GetGroups()','const handleAddNode');
-  const context={getNodes:async()=>({data:[]}),GetGroup:async()=>({data:[]}),tableData:{value:[{ID:1}]},tableDataTemp:{value:[{ID:1}]},allNodes:{value:[1]},allGroupNames:{value:['Old']},RadioGroup:{value:'1'}};
+  const context={getNodes:async()=>({data:[]}),GetGroup:async()=>({data:[]}),tableData:{value:[{ID:1}]},tableDataTemp:{value:[{ID:1}]},allNodes:{value:[1]},allGroupNames:{value:['Old']},activeName:{value:'全部'},RadioGroup:{value:'1'},Nodedialog:{value:false},Groupdialog:{value:false}};
   vm.createContext(context);vm.runInContext(nodes+groups,context);
   await vm.runInContext('getnodes();',context);await vm.runInContext('GetGroups();',context);
   for(const key of ['tableData','tableDataTemp','allNodes','allGroupNames'])assert.equal(context[key].value.length,0);
