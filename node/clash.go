@@ -41,9 +41,10 @@ type Proxy struct {
 	Sni                string                 `yaml:"sni,omitempty"`
 	Obfs               string                 `yaml:"obfs,omitempty"`
 	Obfs_password      string                 `yaml:"obfs-password,omitempty"`
+	Obfs_param         string                 `yaml:"obfs-param,omitempty"`
+	Protocol_param     string                 `yaml:"protocol-param,omitempty"`
 	Protocol           string                 `yaml:"protocol,omitempty"`
 	Uuid               string                 `yaml:"uuid,omitempty"`
-	Peer               string                 `yaml:"peer,omitempty"`
 	Congestion_control string                 `yaml:"congestion-controller,omitempty"`
 	Udp_relay_mode     string                 `yaml:"udp-relay-mode,omitempty"`
 	Disable_sni        bool                   `yaml:"disable-sni,omitempty"`
@@ -181,7 +182,8 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Cipher:           ssr.Method,
 				Password:         ssr.Password,
 				Obfs:             ssr.Obfs,
-				Obfs_password:    ssr.Qurey.Obfsparam,
+				Obfs_param:       ssr.Qurey.Obfsparam,
+				Protocol_param:   ssr.Qurey.Protoparam,
 				Protocol:         ssr.Protocol,
 				Udp:              sqlconfig.Udp,
 				Skip_cert_verify: sqlconfig.Cert,
@@ -216,7 +218,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Alpn:               trojan.Query.Alpn,
 				Ws_opts:            ws_opts,
 				Udp:                sqlconfig.Udp,
-				Skip_cert_verify:   sqlconfig.Cert,
+				Skip_cert_verify:   sqlconfig.Cert || trojan.Query.AllowInsecure != 0,
 			}
 			proxys = append(proxys, trojanproxy)
 		case Scheme == "vmess":
@@ -342,9 +344,9 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Up:               hy.UpMbps,
 				Down:             hy.DownMbps,
 				Alpn:             hy.ALPN,
-				Peer:             hy.Peer,
+				Sni:              hy.Peer,
 				Udp:              sqlconfig.Udp,
-				Skip_cert_verify: sqlconfig.Cert,
+				Skip_cert_verify: sqlconfig.Cert || hy.Insecure != 0,
 			}
 			proxys = append(proxys, hyproxy)
 		case Scheme == "hy2" || Scheme == "hysteria2":
@@ -368,7 +370,7 @@ func EncodeClash(urls []string, sqlconfig SqlConfig) ([]byte, error) {
 				Password:         hy2.Password,
 				Obfs_password:    hy2.ObfsPassword,
 				Udp:              sqlconfig.Udp,
-				Skip_cert_verify: sqlconfig.Cert,
+				Skip_cert_verify: sqlconfig.Cert || hy2.Insecure != 0,
 			}
 			proxys = append(proxys, hyproxy2)
 		case Scheme == "tuic":

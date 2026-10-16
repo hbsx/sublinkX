@@ -100,31 +100,42 @@ const handleDel = (row:any) => {
     })
 }
 
-const selectDel = () => {
-  if (multipleSelection.value.length === 0) {
-      return
-  }
-  ElMessageBox.confirm(
-    `你是否要删除选中这些 ?`,
-    '提示',
-    {
-      confirmButtonText: 'OK',
-      cancelButtonText: 'Cancel',
-      type: 'warning',
-    }
-  ).then( () => {
-    for (let i = 0; i < multipleSelection.value.length; i++) {
-       DelTemp({
-        filename: multipleSelection.value[i].file,
-      })
-        tableData.value = tableData.value.filter((item) => item.file !== multipleSelection.value[i].file)
+const selectDel = async () => {
+  const selected = [...multipleSelection.value]
+  if (selected.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `你是否要删除选中这些 ?`,
+      '提示',
+      {
+        confirmButtonText: 'OK',
+        cancelButtonText: 'Cancel',
+        type: 'warning',
       }
-      ElMessage({
-        type: 'success',
-        message: '删除成功',
-      })
-    })
+    )
+  } catch {
+    return
+  }
 
+  let failed = 0
+  for (const item of selected) {
+    try {
+      await DelTemp({ filename: item.file })
+    } catch {
+      failed++
+    }
+  }
+  try {
+    await gettemps()
+  } catch {
+    ElMessage.error('列表刷新失败，请手动刷新')
+    return
+  }
+  if (failed > 0) {
+    ElMessage.warning(`删除完成：成功 ${selected.length - failed} 项，失败 ${failed} 项`)
+  } else {
+    ElMessage.success(`成功删除 ${selected.length} 项`)
+  }
 }
 // 分页显示
 const currentPage = ref(1);

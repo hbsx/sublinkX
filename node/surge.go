@@ -84,7 +84,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 				"port":             trojan.Port,
 				"password":         trojan.Password,
 				"udp":              sqlconfig.Udp,
-				"skip-cert-verify": sqlconfig.Cert,
+				"skip-cert-verify": sqlconfig.Cert || trojan.Query.AllowInsecure != 0,
 			}
 			trojanproxy := fmt.Sprintf("%s = trojan, %s, %d, password=%s, udp-relay=%t, skip-cert-verify=%t",
 				proxy["name"], proxy["server"], proxy["port"], proxy["password"], proxy["udp"], proxy["skip-cert-verify"])
@@ -106,7 +106,7 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 				"port":             hy2.Port,
 				"password":         hy2.Password,
 				"udp":              sqlconfig.Udp,
-				"skip-cert-verify": sqlconfig.Cert,
+				"skip-cert-verify": sqlconfig.Cert || hy2.Insecure != 0,
 			}
 			hy2proxy := fmt.Sprintf("%s = hysteria2, %s, %d, password=%s, udp-relay=%t, skip-cert-verify=%t",
 				proxy["name"], proxy["server"], proxy["port"], proxy["password"], proxy["udp"], proxy["skip-cert-verify"])
@@ -126,12 +126,15 @@ func EncodeSurge(urls []string, sqlconfig SqlConfig) (string, error) {
 				"name":             tuic.Name,
 				"server":           tuic.Host,
 				"port":             tuic.Port,
+				"uuid":             tuic.Uuid,
 				"password":         tuic.Password,
-				"udp":              sqlconfig.Udp,
 				"skip-cert-verify": sqlconfig.Cert || tuic.SkipCertVerify,
 			}
-			tuicproxy := fmt.Sprintf("%s = tuic, %s, %d, token=%s, udp-relay=%t, skip-cert-verify=%t",
-				proxy["name"], proxy["server"], proxy["port"], proxy["password"], proxy["udp"], proxy["skip-cert-verify"])
+			tuicproxy := fmt.Sprintf("%s = tuic-v5, %s, %d, uuid=%s, password=%s, skip-cert-verify=%t",
+				proxy["name"], proxy["server"], proxy["port"], proxy["uuid"], proxy["password"], proxy["skip-cert-verify"])
+			if tuic.Sni != "" {
+				tuicproxy += ", sni=" + tuic.Sni
+			}
 			groups = append(groups, tuic.Name)
 			proxys = append(proxys, tuicproxy)
 		}

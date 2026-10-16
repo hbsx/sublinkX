@@ -29,13 +29,14 @@ func EncodeSSRURL(s Ssr) string {
 	ssr://base64(host:port:protocol:method:obfs:base64(password)/?obfsparam=base64(obfsparam)&protoparam=base64(protoparam)&remarks=base64(remarks)&group=base64(group))
 	*/
 	obfsparam := "obfsparam=" + Base64Encode(s.Qurey.Obfsparam)
+	protoparam := "protoparam=" + Base64Encode(s.Qurey.Protoparam)
 	remarks := "remarks=" + Base64Encode(s.Qurey.Remarks)
 	// 如果没有备注默认使用服务器+端口作为备注
 	if s.Qurey.Remarks == "" {
 		server_port := Base64Encode(s.Server + ":" + strconv.Itoa(s.Port))
 		remarks = fmt.Sprintf("remarks=%s", server_port)
 	}
-	param := fmt.Sprintf("%s:%d:%s:%s:%s:%s/?%s&%s",
+	param := fmt.Sprintf("%s:%d:%s:%s:%s:%s/?%s&%s&%s",
 		s.Server,
 		s.Port,
 		s.Protocol,
@@ -43,6 +44,7 @@ func EncodeSSRURL(s Ssr) string {
 		s.Obfs,
 		Base64Encode(s.Password),
 		obfsparam,
+		protoparam,
 		remarks,
 	)
 	return "ssr://" + Base64Encode(param)
@@ -97,7 +99,7 @@ func DecodeSSRURL(raw string) (Ssr, error) {
 		name = fmt.Sprintf("%s:%d", server, port)
 	}
 	return Ssr{Server: server, Port: port, Protocol: fields[offset+1], Method: fields[offset+2], Obfs: fields[offset+3], Password: password,
-		Qurey: Ssrquery{Remarks: name, Obfsparam: values["obfsparam"]}, Type: "ssr"}, nil
+		Qurey: Ssrquery{Remarks: name, Obfsparam: values["obfsparam"], Protoparam: values["protoparam"]}, Type: "ssr"}, nil
 }
 
 type Ssr struct {
@@ -111,6 +113,7 @@ type Ssr struct {
 	Type     string
 }
 type Ssrquery struct {
-	Obfsparam string
-	Remarks   string
+	Obfsparam  string
+	Protoparam string
+	Remarks    string
 }
