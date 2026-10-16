@@ -148,6 +148,7 @@ function ClearInput() {
   }
   NodeGroupInput.value = ''; // 清空创建分组输入框
   SelectionNodeGroups.value = []; // 清空选中的分组
+  RadioGroup.value = allGroupNames.value.length > 0 ? '1' : '2';
   nodelistShow.value = false; // 隐藏节点列表
   Nodedialog.value = false; // 关闭节点添加弹窗
   Groupdialog.value = false; // 关闭分组绑定弹窗
@@ -155,17 +156,23 @@ function ClearInput() {
 }
 async function getnodes() {
   const {data} = await getNodes();
-  tableDataTemp.value = tableData.value = Array.isArray(data) ? data : []
-  allNodes.value = []; // 清空 allNodes 数组
-  data.forEach((item:any) => {
-      allNodes.value.push(item.ID); // 将所有节点添加到 allNodes 中
-  });
+  const nodes = Array.isArray(data) ? data : [];
+  tableDataTemp.value = nodes;
+  applyNodeGroupFilter();
+  allNodes.value = nodes.map((item: Node) => item.ID);
   
 } 
+function applyNodeGroupFilter() {
+  tableData.value = activeName.value === '全部'
+    ? tableDataTemp.value
+    : tableDataTemp.value.filter(item => item.GroupNodes?.some(group => group.Name === activeName.value));
+}
 async function GetGroups() {
   const {data} = await GetGroup();
   allGroupNames.value = Array.isArray(data) ? data : []
-  RadioGroup.value = allGroupNames.value.length > 0 ? "1" : "2"; // 自动选择单选框值
+  if (!Nodedialog.value && !Groupdialog.value) {
+    RadioGroup.value = allGroupNames.value.length > 0 ? '1' : '2';
+  }
   // console.log("单选框",RadioGroup.value);
   
 }
@@ -174,6 +181,7 @@ async function GetGroups() {
 const handleAddNode = () => {
   dialogMode.value = 'add';
   Nodedialog.value = true;
+  RadioGroup.value = allGroupNames.value.length > 0 ? '1' : '2';
   NodeForm.value = {
     Title: '添加节点',
     Name: '',
@@ -190,15 +198,18 @@ const handleEditNode = (row: Node) => {
   // NodeNewLinkInput.value = row.Link; // 编辑时使用原链接
   dialogMode.value = 'edit';
   Nodedialog.value = true;
+  const currentGroups = (row.GroupNodes || []).map(g => g.Name);
+  RadioGroup.value = currentGroups.length > 0 || allGroupNames.value.length > 0 ? '1' : '2';
+  NodeGroupInput.value = '';
   NodeForm.value = {
     ID: row.ID,
     Title: '编辑节点',
     Name: row.Name,
     Link: row.Link,
     SourceType: row.SourceType || 'auto',
-    GroupName: (row.GroupNodes || []).map(g => g.Name),
+    GroupName: currentGroups,
   };
-  SelectionNodeGroups.value = NodeForm.value.GroupName || [];
+  SelectionNodeGroups.value = [...(NodeForm.value.GroupName || [])];
   SelectionNode.value = row.ID;
 };
 const SubmitNodeForm = async (row:any) => {
@@ -472,15 +483,7 @@ const handleSelectionChange = (val: Node[]) => {
   multipleSelection.value = val;
 };
 
-watch(activeName, (newVal) => {
-  if (newVal === '全部') {
-    tableData.value = tableDataTemp.value;
-  } else {
-    tableData.value = tableDataTemp.value.filter(item => {
-      return item.GroupNodes?.some(group => group.Name === newVal);
-    });
-  }
-});
+watch(activeName, applyNodeGroupFilter);
 
 
 </script>
@@ -518,12 +521,12 @@ watch(activeName, (newVal) => {
   />
 
   <!-- 分组部分 -->
-  <el-radio v-model="RadioGroup" label="1" v-if="allGroupNames.length > 0">选择已有分组</el-radio>
+  <el-radio v-model="RadioGroup" label="1" v-if="allGroupNames.length > 0 || SelectionNodeGroups.length > 0">选择已有分组</el-radio>
   <el-radio v-model="RadioGroup" label="2">创建新分组</el-radio>
 
-  <div v-if="RadioGroup === '1' && allGroupNames.length > 0">
+  <div v-if="RadioGroup === '1' && (allGroupNames.length > 0 || SelectionNodeGroups.length > 0)">
     <el-select v-model="SelectionNodeGroups" multiple placeholder="选择已有分组" class="default">
-      <el-option v-for="item in allGroupNames" :key="item" :label="item" :value="item" />
+      <el-option v-for="item in Array.from(new Set([...allGroupNames, ...SelectionNodeGroups]))" :key="item" :label="item" :value="item" />
     </el-select>
   </div>
 
