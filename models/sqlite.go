@@ -18,9 +18,13 @@ func InitSqlite() {
 		log.Fatal("创建数据库目录失败: ", err)
 	}
 	// 连接数据库
+	logLevel := logger.Warn
+	if os.Getenv("SUBLINK_LOG_MODE") == "off" {
+		logLevel = logger.Silent
+	}
 	db, err := gorm.Open(sqlite.Open("./db/sublink.db"), &gorm.Config{Logger: logger.New(
 		log.New(os.Stderr, "", log.LstdFlags), logger.Config{
-			SlowThreshold: time.Second, LogLevel: logger.Warn,
+			SlowThreshold: time.Second, LogLevel: logLevel,
 			IgnoreRecordNotFoundError: true, ParameterizedQueries: true,
 		})})
 	if err != nil {

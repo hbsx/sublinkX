@@ -65,6 +65,12 @@
 
 ## 更新说明
 
+### 开发版：登录 IP 记录与 Telegram 提醒
+
+账号设置新增最近 **20 条**登录成功/失败记录（时间、来源 IP、设备）及 Telegram 登录提醒。记录只驻留内存，重启清空；提醒配置仅在主动保存时持久写入。支持可信反代/Cloudflare Tunnel 来源识别、Telegram 独立 HTTP 代理及失败尝试合并提醒。普通日志默认仅输出控制台，Compose 默认关闭应用与 Docker 日志。
+
+配置、真实 IP 信任边界和升级说明见 [登录安全说明](docs/login-security.md)。需更新镜像或程序后生效。
+
 ### [2.1.5](https://github.com/hbsx/sublinkX/releases/tag/2.1.5) · 2026-10-13
 
 - 修复从 v2rayN 导入的 TUIC 链接：正确拆分 `UUID%3A密码`，避免将整段写入 Mihomo 的 `uuid`。

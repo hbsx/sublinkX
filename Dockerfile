@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1
 
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
+WORKDIR /webs
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+COPY webs/package.json webs/pnpm-lock.yaml ./
+RUN HUSKY=0 pnpm install --frozen-lockfile --ignore-scripts
+COPY webs/ ./
+RUN pnpm rebuild esbuild vue-demi && pnpm build
+
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine3.24 AS builder
 
 ARG TARGETOS
@@ -12,6 +20,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=frontend /webs/dist/ ./static/
 RUN if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi \
     && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
        go build -trimpath -ldflags="-s -w" -o /out/sublinkX .

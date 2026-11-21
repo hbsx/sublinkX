@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 	"sublink/middlewares"
 	"sublink/models"
 	"sublink/routers"
+	"sublink/security"
 	"sublink/settings"
 	"sublink/utils"
 	"time"
@@ -155,13 +158,21 @@ func initializeConfig() (models.Config, error) {
 }
 
 func Run(port int) {
+	// Login history stays in memory; only explicitly saved alert settings use db/.
+	var err error
+	api.LoginAudit, err = security.New(context.Background(), "./db/login-security.json", os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	utils.Loginit()
+	if os.Getenv("SUBLINK_LOG_MODE") == "off" {
+		gin.DefaultWriter, gin.DefaultErrorWriter = io.Discard, io.Discard
+	}
 	// 初始化gin框架
 	r := gin.New()
 	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
 		return fmt.Sprintf("%s %d %s %s %s\n", p.TimeStamp.Format(time.RFC3339), p.StatusCode, p.Method, strings.SplitN(p.Path, "?", 2)[0], p.Latency)
 	}), middlewares.SafeRecovery(nil))
-	// 初始化日志配置
-	utils.Loginit()
 	// 初始化模板
 	Templateinit()
 	if err := api.InitTemplateDir(); err != nil {

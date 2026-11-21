@@ -2,6 +2,7 @@ package api
 
 import (
 	"log"
+	"net/http"
 	"sublink/middlewares"
 	"sublink/models"
 	"sublink/utils"
@@ -63,12 +64,18 @@ func GetCaptcha(c *gin.Context) {
 
 // 用户登录
 func UserLogin(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
 	username := c.PostForm("username")
 	password := c.PostForm("password")
+	success, reason := false, "账号或密码错误"
+	defer func() {
+		if LoginAudit != nil {
+			LoginAudit.Record(c.Request, username, success, reason)
+		}
+	}()
 	user := &models.User{Username: username, Password: password}
 	err := user.Verify()
 	if err != nil {
-		log.Println("账号或者密码错误")
 		c.JSON(400, gin.H{
 			"msg": "账号或者密码错误",
 		})
@@ -79,12 +86,14 @@ func UserLogin(c *gin.Context) {
 	token, err := tokenForUser(user)
 	if err != nil {
 		log.Println("获取token失败", err)
+		reason = "登录凭据签发失败"
 		c.JSON(400, gin.H{
 			"msg": "获取token失败",
 		})
 		return
 	}
 	// 登录成功返回token
+	success, reason = true, "登录成功"
 	c.JSON(200, gin.H{
 		"code": "00000",
 		"data": gin.H{

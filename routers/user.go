@@ -18,5 +18,9 @@ func User(r *gin.Engine) {
 		userGroup.GET("/me", api.UserMe)
 		userGroup.GET("/page", api.UserPages)
 		userGroup.POST("/update", api.UserSet)
+		userGroup.GET("/login-history", api.LoginHistory)
+		userGroup.GET("/login-notifications", api.LoginNotificationConfig)
+		userGroup.PUT("/login-notifications", api.SaveLoginNotificationConfig)
+		userGroup.POST("/login-notifications/test", api.TestLoginNotification)
 	}
 }

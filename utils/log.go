@@ -8,6 +8,17 @@ import (
 )
 
 func Loginit() {
+	// Console by default: no daily log files or eMMC writes unless requested.
+	mode := os.Getenv("SUBLINK_LOG_MODE")
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	if mode == "off" {
+		log.SetOutput(io.Discard)
+		return
+	}
+	if mode != "file" {
+		log.SetOutput(os.Stdout)
+		return
+	}
 	t := time.Now().Format("2006-01-02") + ".log"
 	if err := os.MkdirAll("./logs", 0755); err != nil {
 		log.Fatal(err)
@@ -20,6 +31,5 @@ func Loginit() {
 	// 设置log输出到控制台
 	mw := io.MultiWriter(os.Stdout, file)
 	// 设置log的输出位置为这个文件
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.SetOutput(mw)
 }

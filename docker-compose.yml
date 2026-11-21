@@ -11,6 +11,17 @@ services:
       - "${SUBLINK_DATA_DIR:-./data}/logs:/app/logs"
     environment:
       TZ: Asia/Shanghai
+      SUBLINK_LOG_MODE: ${SUBLINK_LOG_MODE:-off}
+      SUBLINK_LOGIN_TRUSTED_PROXIES: ${SUBLINK_LOGIN_TRUSTED_PROXIES:-}
+      SUBLINK_LOGIN_IP_HEADER: ${SUBLINK_LOGIN_IP_HEADER:-CF-Connecting-IP}
+      SUBLINK_LOGIN_TG_ENABLED: ${SUBLINK_LOGIN_TG_ENABLED:-0}
+      SUBLINK_LOGIN_TG_BOT_TOKEN: ${SUBLINK_LOGIN_TG_BOT_TOKEN:-}
+      SUBLINK_LOGIN_TG_CHAT_ID: ${SUBLINK_LOGIN_TG_CHAT_ID:-}
+      SUBLINK_LOGIN_TG_PROXY_URL: ${SUBLINK_LOGIN_TG_PROXY_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "none"
     restart: unless-stopped
     init: true
     stop_grace_period: 10s

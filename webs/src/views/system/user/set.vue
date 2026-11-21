@@ -3,6 +3,7 @@ import { ref,onMounted } from 'vue'
 import {useUserStore} from "@/store"
 import {updateUserPassword} from "@/api/user"
 import { useI18n } from 'vue-i18n'
+import LoginSecurity from './components/LoginSecurity.vue'
 // 创建 i18n 实例
 const { t } = useI18n()
 const userinfo = ref()
@@ -79,6 +80,7 @@ function resetPassword(row: { [key: string]: any }) {
         </el-col>
       </el-row> 
   </el-card>
+  <LoginSecurity />
 </template>
 
 
