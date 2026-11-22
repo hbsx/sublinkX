@@ -70,7 +70,7 @@ onMounted(() => { refreshHistory(); loadSettings(); });
         <el-button :loading="loading" @click="refreshHistory">刷新</el-button>
       </div>
     </template>
-    <p class="login-security-note">仅保留最近 20 条登录成功和失败记录，新记录覆盖最旧记录。记录保存在内存中，服务重启后清空。</p>
+    <p class="login-security-note">仅记录公网 IP 的登录成功和失败，内网及本机登录不记录。最多保留最近 20 条，新记录覆盖最旧记录。记录保存在内存中，服务重启后清空。</p>
     <p v-if="history" class="login-security-note">本次记录开始时间：{{ formatTime(history.startedAt) }}</p>
     <el-table v-loading="loading" :data="history?.list ?? []" empty-text="暂无登录记录">
       <el-table-column label="登录时间" min-width="170">
@@ -89,7 +89,7 @@ onMounted(() => { refreshHistory(); loadSettings(); });
 
   <el-card class="login-security-card">
     <template #header>Telegram 登录提醒</template>
-    <p class="login-security-note">成功登录时立即提醒；5 分钟内累计失败 5 次时合并提醒，失败提醒最多每 5 分钟一条。保存设置后可发送测试消息。</p>
+    <p class="login-security-note">仅对公网 IP 登录提醒，内网及本机登录不提醒。成功登录时立即提醒；5 分钟内累计失败 5 次时合并提醒，失败提醒最多每 5 分钟一条。保存设置后可发送测试消息。</p>
     <el-form :model="form" label-width="110px" :disabled="!ready || saving" @submit.prevent="saveSettings">
       <el-form-item label="启用提醒"><el-switch v-model="form.enabled" /></el-form-item>
       <el-form-item label="Bot Token">

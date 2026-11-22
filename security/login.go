@@ -65,6 +65,10 @@ func (s *Service) Record(request *http.Request, username string, success bool, r
 
 func (s *Service) recordAt(request *http.Request, username string, success bool, reason string, now time.Time) {
 	ip, source := s.resolver.Resolve(request)
+	// Filter the resolved visitor, not the proxy peer, before touching audit state.
+	if !isPublicLoginIP(ip) {
+		return
+	}
 	entry := Login{Time: now, Username: clean(username, 64), IP: ip,
 		IPSource: source, UserAgent: clean(request.UserAgent(), 180), Success: success, Reason: reason}
 	s.mu.Lock()

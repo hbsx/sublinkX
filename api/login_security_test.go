@@ -50,7 +50,7 @@ func TestLoginAuditRequiresAuthenticationAndRecordsActualOutcome(t *testing.T) {
 	for _, password := range []string{"wrong-password", "not-for-audit-records"} {
 		form := url.Values{"username": {"admin"}, "password": {password}}
 		req := httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(form.Encode()))
-		req.RemoteAddr = "203.0.113.12:12345"
+		req.RemoteAddr = "9.9.9.9:12345"
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("CF-Connecting-IP", "8.8.8.8")
 		w := httptest.NewRecorder()
@@ -71,6 +71,23 @@ func TestLoginAuditRequiresAuthenticationAndRecordsActualOutcome(t *testing.T) {
 			token = body.Data.AccessToken
 		}
 	}
+	// LAN logins still authenticate normally; neither outcome enters public audit.
+	for _, password := range []string{"wrong-password", "not-for-audit-records"} {
+		form := url.Values{"username": {"admin"}, "password": {password}}
+		req := httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(form.Encode()))
+		req.RemoteAddr = "192.168.1.10:12345"
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("CF-Connecting-IP", "8.8.8.8")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		want := 200
+		if password == "wrong-password" {
+			want = 400
+		}
+		if w.Code != want || len(LoginAudit.Snapshot().List) != 2 {
+			t.Fatal("LAN authentication changed or created a public login record")
+		}
+	}
 	req := httptest.NewRequest("GET", "/api/v1/users/login-history", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -81,7 +98,7 @@ func TestLoginAuditRequiresAuthenticationAndRecordsActualOutcome(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &response) != nil {
 		t.Fatal("audit query failed")
 	}
-	if len(response.Data.List) != 2 || !response.Data.List[0].Success || response.Data.List[1].Success || response.Data.List[0].IP != "203.0.113.12" {
+	if len(response.Data.List) != 2 || !response.Data.List[0].Success || response.Data.List[1].Success || response.Data.List[0].IP != "9.9.9.9" {
 		t.Fatal("wrong login outcome/IP", w.Body.String())
 	}
 	for _, secret := range []string{token, "wrong-password", "not-for-audit-records"} {

@@ -15,6 +15,48 @@ type IPResolver struct {
 	header  string
 }
 
+// Non-public special-use ranges not covered by IsPrivate/IsGlobalUnicast.
+// See the IANA IPv4 and IPv6 Special-Purpose Address Registries.
+var nonPublicLoginRanges = [...]netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("192.88.99.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("100:0:0:1::/64"),
+	netip.MustParsePrefix("2001:2::/48"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("3fff::/20"),
+	netip.MustParsePrefix("5f00::/16"),
+}
+
+func isPublicLoginIP(value string) bool {
+	ip, err := netip.ParseAddr(value)
+	if err != nil || ip.Zone() != "" {
+		return false
+	}
+	ip = ip.Unmap()
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() {
+		return false
+	}
+	// Globally reachable exceptions inside otherwise non-public IPv4 ranges.
+	if ip == netip.MustParseAddr("192.0.0.9") || ip == netip.MustParseAddr("192.0.0.10") {
+		return true
+	}
+	for _, prefix := range nonPublicLoginRanges {
+		if prefix.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+
 func NewIPResolver(peers, header string) (*IPResolver, error) {
 	if header == "" {
 		header = "CF-Connecting-IP"

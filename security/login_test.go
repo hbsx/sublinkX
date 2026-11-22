@@ -28,7 +28,7 @@ func testService(t *testing.T) *Service {
 
 func testRequest() *http.Request {
 	r := httptest.NewRequest("POST", "/api/v1/auth/login", nil)
-	r.RemoteAddr = "203.0.113.8:443"
+	r.RemoteAddr = "1.1.1.1:443"
 	return r
 }
 
@@ -74,7 +74,7 @@ func TestForwardedIPCannotBeSpoofedByUntrustedPeer(t *testing.T) {
 	}
 	req := testRequest()
 	req.Header.Set("CF-Connecting-IP", "2001:db8::7")
-	if ip, _ := r.Resolve(req); ip != "203.0.113.8" {
+	if ip, _ := r.Resolve(req); ip != "1.1.1.1" {
 		t.Fatal("trusted spoofed header")
 	}
 	req.RemoteAddr = "172.17.0.1:51000"
@@ -101,8 +101,8 @@ func TestXFFUsesRightmostUntrustedHop(t *testing.T) {
 	r, _ := NewIPResolver("127.0.0.1,172.17.0.1", "X-Forwarded-For")
 	req := testRequest()
 	req.RemoteAddr = "127.0.0.1:3000"
-	req.Header.Set("X-Forwarded-For", "8.8.8.8, 203.0.113.8, 172.17.0.1")
-	if ip, _ := r.Resolve(req); ip != "203.0.113.8" {
+	req.Header.Set("X-Forwarded-For", "8.8.8.8, 1.1.1.1, 172.17.0.1")
+	if ip, _ := r.Resolve(req); ip != "1.1.1.1" {
 		t.Fatal("spoofed leftmost IP won", ip)
 	}
 }
@@ -172,14 +172,14 @@ func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { retur
 
 func TestTelegramPayloadAndErrorNeverExposeSecret(t *testing.T) {
 	s := testService(t)
-	note := notification{Config: Config{BotToken: "123456789:abcdefghijklmnopqrstuvwxyz_123456789", ChatID: "123456"}, Entry: Login{Time: time.Now(), Username: "admin", IP: "203.0.113.8", Success: true}}
+	note := notification{Config: Config{BotToken: "123456789:abcdefghijklmnopqrstuvwxyz_123456789", ChatID: "123456"}, Entry: Login{Time: time.Now(), Username: "admin", IP: "1.1.1.1", Success: true}}
 	s.client = func(Config) *http.Client {
 		return &http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
 			if r.URL.Host != "api.telegram.org" || r.Method != "POST" {
 				t.Fatal("wrong destination")
 			}
 			body, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(body), "203.0.113.8") || strings.Contains(string(body), note.Config.BotToken) {
+			if !strings.Contains(string(body), "1.1.1.1") || strings.Contains(string(body), note.Config.BotToken) {
 				t.Fatal("bad alert payload")
 			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"ok":true}`))}, nil
