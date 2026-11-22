@@ -34,6 +34,7 @@ type Status struct {
 	Sent       uint64    `json:"sent"`
 	Failed     uint64    `json:"failed"`
 	Dropped    uint64    `json:"dropped"`
+	Canceled   uint64    `json:"canceled"`
 	LastSentAt time.Time `json:"lastSentAt"`
 	LastError  string    `json:"lastError"`
 	Generation uint64    `json:"-"`
@@ -68,6 +69,7 @@ func New(ctx context.Context, path string, getenv func(string) string) (*Service
 	}
 	config := Config{BotToken: getenv("SUBLINK_LOGIN_TG_BOT_TOKEN"), ChatID: getenv("SUBLINK_LOGIN_TG_CHAT_ID"), ProxyURL: getenv("SUBLINK_LOGIN_TG_PROXY_URL"), Enabled: getenv("SUBLINK_LOGIN_TG_ENABLED") == "1"}
 	f, err := os.Open(path)
+	saved := err == nil
 	if err == nil {
 		defer f.Close()
 		if info, statErr := f.Stat(); statErr != nil || info.Size() > 8192 {
@@ -88,7 +90,7 @@ func New(ctx context.Context, path string, getenv func(string) string) (*Service
 	if err := validate(config); err != nil {
 		return nil, err
 	}
-	s := &Service{startedAt: time.Now(), resolver: resolver, config: config, configPath: path, queue: make(chan notification, 32), client: telegramClient}
+	s := &Service{startedAt: time.Now(), resolver: resolver, config: config, configSaved: saved, configPath: path, queue: make(chan notification, 32), client: telegramClient}
 	go s.run(ctx)
 	return s, nil
 }
@@ -110,6 +112,10 @@ func (s *Service) Configure(next Config) error {
 	if err := validate(next); err != nil {
 		return err
 	}
+	changed := next != s.config
+	if !changed && s.configSaved {
+		return nil
+	}
 	data, err := json.Marshal(next)
 	if err != nil {
 		return errors.New("登录提醒配置无法保存")
@@ -130,7 +136,10 @@ func (s *Service) Configure(next Config) error {
 		return errors.New("登录提醒配置无法保存")
 	}
 	s.config = next
-	s.status.Generation++ // Discard queued notifications prepared with old credentials/settings.
+	s.configSaved = true
+	if changed {
+		s.status.Generation++ // Only actual changes invalidate old notification destinations.
+	}
 	s.status.LastError = ""
 	return nil
 }

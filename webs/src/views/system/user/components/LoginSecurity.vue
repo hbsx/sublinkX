@@ -104,6 +104,7 @@ onMounted(() => { refreshHistory(); loadSettings(); });
     </el-form>
     <p v-if="history" class="login-security-note">
       本次运行发送成功 {{ history.notifications.sent }} 次，失败 {{ history.notifications.failed }} 次，队列满跳过 {{ history.notifications.dropped }} 次。
+      配置变更取消 {{ history.notifications.canceled }} 次。
       最近发送：{{ formatTime(history.notifications.lastSentAt) }}。
     </p>
     <el-alert v-if="history?.notifications.lastError" :title="history.notifications.lastError" type="warning" :closable="false" />

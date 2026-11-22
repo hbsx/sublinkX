@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ func EncodeHYURL(hy HY) string {
 	}
 	u := url.URL{
 		Scheme:   "hysteria",
-		Host:     fmt.Sprintf("%s:%d", hy.Host, hy.Port),
+		Host:     net.JoinHostPort(hy.Host, strconv.Itoa(hy.Port)),
 		Fragment: hy.Name,
 	}
 	q := u.Query()
@@ -51,7 +52,7 @@ func EncodeHYURL(hy HY) string {
 	q.Set("auth", hy.Auth)
 	q.Set("upmbps", strconv.Itoa(hy.UpMbps))
 	q.Set("downmbps", strconv.Itoa(hy.DownMbps))
-	// q.Set("alpn", hy.ALPN)
+	q.Set("alpn", strings.Join(hy.ALPN, ","))
 	// 检查query是否有空值，有的话删除
 	for k, v := range q {
 		if v[0] == "" {

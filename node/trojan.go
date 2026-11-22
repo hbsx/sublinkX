@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -58,7 +59,7 @@ func EncodeTrojanURL(t Trojan) string {
 	u := url.URL{
 		Scheme: "trojan",
 		User:   url.User(t.Password),
-		Host:   fmt.Sprintf("%s:%d", t.Hostname, t.Port),
+		Host:   net.JoinHostPort(t.Hostname, strconv.Itoa(t.Port)),
 	}
 	q := u.Query()
 	q.Set("peer", t.Query.Peer)
@@ -68,7 +69,7 @@ func EncodeTrojanURL(t Trojan) string {
 	q.Set("path", t.Query.Path)
 	q.Set("security", t.Query.Security)
 	q.Set("fp", t.Query.Fp)
-	// q.Set("alpn", t.Query.Alpn)
+	q.Set("alpn", strings.Join(t.Query.Alpn, ","))
 	q.Set("host", t.Query.Host)
 	q.Set("flow", t.Query.Flow)
 	// 检查query是否有空值，有的话删除

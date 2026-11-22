@@ -49,7 +49,7 @@ func EncodeHY2URL(hy2 HY2) string {
 	u := url.URL{
 		Scheme:   "hy2",
 		User:     url.User(hy2.Password),
-		Host:     fmt.Sprintf("%s:%d", hy2.Host, hy2.Port),
+		Host:     net.JoinHostPort(hy2.Host, strconv.Itoa(hy2.Port)),
 		Fragment: hy2.Name,
 	}
 	q := u.Query()
@@ -58,7 +58,10 @@ func EncodeHY2URL(hy2 HY2) string {
 	q.Set("auth", hy2.Auth)
 	q.Set("upmbps", strconv.Itoa(hy2.UpMbps))
 	q.Set("downmbps", strconv.Itoa(hy2.DownMbps))
-	// q.Set("alpn", hy2.ALPN)
+	q.Set("alpn", strings.Join(hy2.ALPN, ","))
+	q.Set("sni", hy2.Sni)
+	q.Set("obfs", hy2.Obfs)
+	q.Set("obfs-password", hy2.ObfsPassword)
 	// 检查query是否有空值，有的话删除
 	for k, v := range q {
 		if v[0] == "" {
@@ -101,6 +104,9 @@ func DecodeHY2URL(s string) (HY2, error) {
 		alpn = nil
 	}
 	sni := u.Query().Get("sni")
+	if sni == "" {
+		sni = u.Query().Get("peer")
+	}
 	obfs := u.Query().Get("obfs")
 	obfsPassword := u.Query().Get("obfs-password")
 	name := u.Fragment
@@ -119,6 +125,7 @@ func DecodeHY2URL(s string) (HY2, error) {
 		ALPN:         alpn,
 		Name:         name,
 		Sni:          sni,
+		Peer:         u.Query().Get("peer"),
 		Obfs:         obfs,
 		ObfsPassword: obfsPassword,
 	}, nil

@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"log"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -40,6 +41,7 @@ func (gn *GroupNode) Add() error {
 		return result.Error // 如果查询出错，返回错误
 	}
 	if result.RowsAffected > 0 { // 如果查询到分组已存在
+		*gn = existingGroup
 		// log.Println("分组已存在")
 		return nil // 不返回错误存在就跳过
 
@@ -52,29 +54,49 @@ func (gn *GroupNode) Ass(n *Node) error {
 	result := DB.Model(gn).Where("name = ?", gn.Name).First(gn) // 查找分组
 	// log.Println("分组ID:", gn.ID, "分组昵称:", gn.Name, "错误信息:", result.Error)
 	if result.Error != nil {
-		log.Println(result.Error)
+		return result.Error
 	}
-	result = DB.Model(n).Where("name = ?", n.Name).First(n) // 查找节点
-	// log.Println("节点ID:", n.ID, "节点昵称:", n.Name, "错误信息:", result.Error)
-	if result.Error != nil {
-		log.Println(result.Error)
+	if err := resolveNode(DB, n); err != nil {
+		return err
 	}
 	return DB.Model(&gn).Association("Nodes").Append(n)
 }
 
 // 更新分组信息
 func (gn *GroupNode) Update(NewGn *GroupNode) error {
-	// 读取分组数据
-	var FirstGn GroupNode
-	result := DB.Model(gn).Where("id = ? or name = ?", NewGn.ID, NewGn.Name).First(&FirstGn)
-	if result.Error != nil {
-		log.Println(result.Error)
-		return result.Error
+	if NewGn == nil || strings.TrimSpace(NewGn.Name) == "" {
+		return errors.New("分组名称不能为空")
 	}
-	if result.RowsAffected > 0 {
-		return errors.New("分组已存在")
+	name := strings.TrimSpace(NewGn.Name)
+	var existing GroupNode
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if gn.ID > 0 {
+			if err := tx.First(&existing, gn.ID).Error; err != nil {
+				return err
+			}
+		} else {
+			var matches []GroupNode
+			if err := tx.Where("name = ?", gn.Name).Limit(2).Find(&matches).Error; err != nil {
+				return err
+			}
+			if gn.Name == "" || len(matches) != 1 {
+				return errors.New("分组不存在或同名，请按 ID 操作")
+			}
+			existing = matches[0]
+		}
+		var count int64
+		if err := tx.Model(&GroupNode{}).Where("name = ? AND id <> ?", name, existing.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errors.New("分组已存在")
+		}
+		return tx.Model(&existing).Update("name", name).Error
+	})
+	if err == nil {
+		gn.ID, gn.Name = existing.ID, name
 	}
-	return DB.Model(gn).Where("id = ? or name = ?", gn.ID, gn.Name).Updates(&NewGn).Error
+	return err
 }
 
 // 删除分组
@@ -200,7 +222,12 @@ func (n *Node) UpdateNode(next *Node) error {
 func IsGroupNotDel(gns []GroupNode) error {
 	// 如果分组节点没有关联的节点则删除分组节点
 	for _, gn := range gns {
-		DB.Model(gn).Preload("Nodes").Find(&gn) // 预加载分组节点数据
+		if gn.ID <= 0 {
+			return errors.New("分组 ID 无效")
+		}
+		if err := DB.Model(gn).Preload("Nodes").First(&gn).Error; err != nil {
+			return err
+		}
 		// log.Println("gnNodes:", gn.Nodes, "长度:", len(gn.Nodes))
 		if len(gn.Nodes) == 0 {
 			// log.Println("分组节点没有关联的节点，删除分组节点", gn.Name)

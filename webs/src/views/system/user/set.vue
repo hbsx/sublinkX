@@ -18,7 +18,7 @@ const password:Ref<string> = ref('')
 
 /** 重置密码 */
 function resetPassword(row: { [key: string]: any }) {
-  if (!username.value || !password.value) {
+  if (!username.value.trim() || !password.value) {
         ElMessage.error(t('userset.message.xx1'))
         return
       }
@@ -38,7 +38,7 @@ function resetPassword(row: { [key: string]: any }) {
     .then(() => {
       updateUserPassword({
         username:username.value.trim(),
-        password:password.value.trim()
+        password:password.value
       
       }
        ).then(() => {

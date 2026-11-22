@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -63,11 +64,13 @@ func EncodeVLESSURL(v VLESS) string {
 	u := url.URL{
 		Scheme: "vless",
 		User:   url.User(v.Uuid),
-		Host:   fmt.Sprintf("%s:%d", v.Server, v.Port),
+		Host:   net.JoinHostPort(v.Server, strconv.Itoa(v.Port)),
 	}
 	q := u.Query()
 	q.Set("security", v.Query.Security)
-	// q.Set("alpn", v.Query.Alpn)
+	q.Set("alpn", strings.Join(v.Query.Alpn, ","))
+	q.Set("serviceName", v.Query.ServiceName)
+	q.Set("mode", v.Query.Mode)
 	q.Set("sni", v.Query.Sni)
 	q.Set("fp", v.Query.Fp)
 	q.Set("sid", v.Query.Sid)

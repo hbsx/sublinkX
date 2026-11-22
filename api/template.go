@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sublink/models"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +22,28 @@ type Temp struct {
 // 定义允许操作的基础目录
 
 var baseTemplateDir string
+
+// Serialize management writes; subscription reads see complete old or new files.
+var templateMu sync.RWMutex
+
+func writeTemplateAtomic(path string, text string, mode os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".template-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if err = f.Chmod(mode); err == nil {
+		_, err = f.WriteString(text)
+	}
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(f.Name(), path)
+}
 
 func InitTemplateDir() error {
 	// === 修改点开始 ===
@@ -102,6 +125,8 @@ func safeFilePath(filename string) (string, error) {
 }
 
 func GetTempS(c *gin.Context) {
+	templateMu.RLock()
+	defer templateMu.RUnlock()
 	// 由于 init() 函数已经确保了 baseTemplateDir 的存在，这里无需再次检查和创建。
 	files, err := os.ReadDir(baseTemplateDir)
 	if err != nil {
@@ -164,6 +189,8 @@ func GetTempS(c *gin.Context) {
 	})
 }
 func UpdateTemp(c *gin.Context) {
+	templateMu.Lock()
+	defer templateMu.Unlock()
 	filename := c.PostForm("filename")
 	oldname := c.PostForm("oldname")
 	text := c.PostForm("text")
@@ -194,7 +221,8 @@ func UpdateTemp(c *gin.Context) {
 	}
 
 	// 检查旧文件是否存在
-	if _, err := os.Stat(oldFullPath); os.IsNotExist(err) {
+	oldInfo, err := os.Stat(oldFullPath)
+	if os.IsNotExist(err) {
 		c.JSON(400, gin.H{
 			"msg": "旧文件不存在",
 		})
@@ -227,26 +255,22 @@ func UpdateTemp(c *gin.Context) {
 		}
 	}
 
-	// 如果文件名不同，则进行重命名操作
-	if oldFullPath != newFullPath {
-		err = os.Rename(oldFullPath, newFullPath)
-		if err != nil {
-			log.Println("文件改名失败:", err)
-			c.JSON(500, gin.H{
-				"msg": "改名失败",
-			})
-			return
-		}
-	}
-
-	// 写入文件内容到新的安全路径
-	err = os.WriteFile(newFullPath, []byte(text), 0666) // 确保写入到新的安全路径
+	// Write and close a temporary file before replacing anything. Full disks or
+	// failed writes must not truncate the original template or rename it away.
+	err = writeTemplateAtomic(newFullPath, text, oldInfo.Mode().Perm())
 	if err != nil {
 		log.Println("修改文件内容失败:", err)
 		c.JSON(500, gin.H{
 			"msg": "修改失败",
 		})
 		return
+	}
+	if oldFullPath != newFullPath {
+		if err := os.Remove(oldFullPath); err != nil {
+			os.Remove(newFullPath) // Original is still intact; roll back the new name.
+			c.JSON(500, gin.H{"msg": "改名失败，原模板已保留"})
+			return
+		}
 	}
 
 	c.JSON(200, gin.H{
@@ -255,6 +279,8 @@ func UpdateTemp(c *gin.Context) {
 	})
 }
 func AddTemp(c *gin.Context) {
+	templateMu.Lock()
+	defer templateMu.Unlock()
 	filename := c.PostForm("filename")
 	text := c.PostForm("text")
 
@@ -301,7 +327,7 @@ func AddTemp(c *gin.Context) {
 	}
 
 	// 写入文件
-	err = os.WriteFile(fullPath, []byte(text), 0666)
+	err = writeTemplateAtomic(fullPath, text, 0644)
 	if err != nil {
 		log.Println("写入文件失败:", err)
 		c.JSON(500, gin.H{
@@ -317,6 +343,8 @@ func AddTemp(c *gin.Context) {
 }
 
 func DelTemp(c *gin.Context) {
+	templateMu.Lock()
+	defer templateMu.Unlock()
 	filename := c.PostForm("filename")
 
 	if filename == "" {

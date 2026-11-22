@@ -16,6 +16,17 @@ import (
 // 在 main 中完成配置初始化后赋值，避免首次启动读取到空密钥。
 var Secret []byte
 
+const maxTokenLength = 8192
+
+func publicRequest(method, path string) bool {
+	if method == http.MethodGet || method == http.MethodHead {
+		if path == "/" || path == "/static" || strings.HasPrefix(path, "/static/") || path == "/api/v1/auth/captcha" || path == "/api/v1/version" || path == "/c/" {
+			return true
+		}
+	}
+	return method == http.MethodPost && path == "/api/v1/auth/login"
+}
+
 // JwtClaims jwt声明
 type JwtClaims struct {
 	Username       string `json:"username"`
@@ -25,19 +36,9 @@ type JwtClaims struct {
 
 // AuthorToken 验证token中间件
 func AuthorToken(c *gin.Context) {
-	// 定义白名单
-	list := []string{"/static", "/api/v1/auth/login", "/api/v1/auth/captcha", "/c/", "/api/v1/version"}
-	// 如果是首页直接跳过
-	if c.Request.URL.Path == "/" {
+	if publicRequest(c.Request.Method, c.Request.URL.Path) {
 		c.Next()
 		return
-	}
-	// 如果是白名单直接跳过
-	for _, v := range list {
-		if strings.HasPrefix(c.Request.URL.Path, v) {
-			c.Next()
-			return
-		}
 	}
 	token := c.Request.Header.Get("Authorization")
 	if token == "" {
@@ -45,14 +46,17 @@ func AuthorToken(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
+	// Bound work before parsing: Split on an attacker-controlled dot flood allocates
+	// a slice proportional to the full header. Count never allocates that slice.
+	if len(token) > maxTokenLength || strings.Count(token, ".") != 2 {
 		c.JSON(400, gin.H{"msg": "token格式错误"})
 		c.Abort()
 		return
 	}
 	// 去掉Bearer前缀
-	token = strings.Replace(token, "Bearer ", "", -1)
+	if len(token) >= 7 && strings.EqualFold(token[:7], "Bearer ") {
+		token = token[7:]
+	}
 	mc, err := ParseToken(token)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -68,6 +72,9 @@ func AuthorToken(c *gin.Context) {
 
 // ParseToken 解析JWT
 func ParseToken(tokenString string) (*JwtClaims, error) {
+	if len(tokenString) > maxTokenLength || strings.Count(tokenString, ".") != 2 {
+		return nil, errors.New("invalid token length or format")
+	}
 	// 解析token
 	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (i interface{}, err error) {
 		if token.Method != jwt.SigningMethodHS256 {

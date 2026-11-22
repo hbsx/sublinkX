@@ -1,0 +1,14 @@
+allowBuilds:
+  '@parcel/watcher': false
+  bufferutil: false
+  es5-ext: false
+  esbuild: true
+  utf-8-validate: false
+  vue-demi: true
+
+overrides:
+  follow-redirects: ^1.16.2
+  fast-uri@>=3.0.0 <3.1.9: ^3.1.9
+  postcss-selector-parser@>=6.0.0 <6.1.5: ^6.1.5
+  qs@>=6.7.0 <6.16.1: ^6.16.1
+  minimatch@>=7.0.0 <11.0.1: ^11.0.1

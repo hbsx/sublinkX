@@ -47,23 +47,27 @@ jobs:
           go test ./node -fuzz=FuzzNodeParsersDoNotPanic -fuzztime=10s -parallel=2
           go vet ./...
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.9
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: webs/pnpm-lock.yaml
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
 
       - name: Check frontend
         run: |
           pnpm --dir webs install --frozen-lockfile
           pnpm --dir webs test
           pnpm --dir webs build
+
+      - name: Audit all frontend dependencies
+        run: pnpm --dir webs audit --audit-level=low
 
   build:
     needs: test
@@ -123,14 +127,12 @@ jobs:
         with:
           go-version: "1.26.x"
           cache: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: webs/pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
       - name: Build release binaries and checksums
         # Frontend assets are built by build.sh before Go embeds them.
         run: |

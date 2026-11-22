@@ -286,9 +286,9 @@ const ClientUrl = ref('')
 const handleClient = (subscription:Sub) => {
   let serverAddress = location.protocol + '//' + location.hostname + (location.port ? ':' + location.port : '');
   ClientDiaLog.value = true
-  ClientUrl.value = `${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}`
+  ClientUrl.value = `${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}&client=v2ray`
   ClientList.forEach((item:string) => {
-    ClientUrls.value[item]=`${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}`
+    ClientUrls.value[item]=`${serverAddress}/c/?token=${encodeURIComponent(subscription.Token)}&client=${encodeURIComponent(item)}`
   })
 }
 

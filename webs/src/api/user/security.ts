@@ -16,7 +16,7 @@ export interface LoginHistory {
   list: LoginRecord[];
   limit: number;
   startedAt: string;
-  notifications: { sent: number; failed: number; dropped: number; lastSentAt: string; lastError: string };
+  notifications: { sent: number; failed: number; dropped: number; canceled: number; lastSentAt: string; lastError: string };
 }
 
 export interface LoginNotificationSettings {

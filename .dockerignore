@@ -14,6 +14,7 @@ sublink_amd64
 sublink_arm64
 sublink.exe
 static.pre-captcha-*
+static
 webs/node_modules
 webs/dist
 .cache

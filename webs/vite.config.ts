@@ -8,8 +8,8 @@ import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 import Icons from "unplugin-icons/vite";
 import IconsResolver from "unplugin-icons/resolver";
 
-import { createSvgIconsPlugin } from "vite-plugin-svg-icons";
-import mockDevServerPlugin from "vite-plugin-mock-dev-server";
+import { createSvgIconsPlugin } from "./build/svg-icons";
+import { mockDevServerPlugin } from "vite-plugin-mock-dev-server";
 
 import UnoCSS from "unocss/vite";
 import { resolve } from "path";
@@ -44,7 +44,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       preprocessorOptions: {
         // 定义全局 SCSS 变量
         scss: {
-          javascriptEnabled: true,
           additionalData: `
             @use "@/styles/variables.scss" as *;
           `,
@@ -121,12 +120,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         // 自动安装图标库
         autoInstall: true,
       }),
-      createSvgIconsPlugin({
-        // 指定需要缓存的图标文件夹
-        iconDirs: [resolve(pathSrc, "assets/icons")],
-        // 指定symbolId格式
-        symbolId: "icon-[dir]-[name]",
-      }),
+      createSvgIconsPlugin(resolve(pathSrc, "assets/icons")),
     ],
     // 预加载项目必需的组件
     optimizeDeps: {

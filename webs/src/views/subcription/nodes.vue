@@ -244,6 +244,7 @@ const SubmitNodeForm = async (row:any) => {
 
   } catch (err) {
     ElMessage.error(`${isAdd ? '添加' : '更新'}失败`);
+    return; // Preserve the dialog and input so failed or partial batches can be retried.
   }
   getnodes();
   GetGroups();
@@ -326,7 +327,7 @@ const  handleShownodeGroupList =()=>{
   // 显示这个节点关联的分组
   const nodeData = allNodes.value.find(node => node === SelectionNode.value);
   SelectionNodeGroups.value = []
-  tableData.value.forEach((item, ) => {
+  tableDataTemp.value.forEach((item, ) => {
     if (item.ID === nodeData && (item.GroupNodes?.length ?? 0) > 0) {
       // console.log(`节点 ${nodeData} 的分组:`, item.GroupNodes);
       item.GroupNodes?.forEach((item) => {

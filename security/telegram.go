@@ -26,6 +26,9 @@ func (s *Service) run(ctx context.Context) {
 		case note := <-s.queue:
 			s.mu.Lock()
 			valid := s.config.Enabled && note.Generation == s.status.Generation
+			if !valid {
+				s.status.Canceled++
+			}
 			s.mu.Unlock()
 			if !valid {
 				continue
@@ -35,10 +38,14 @@ func (s *Service) run(ctx context.Context) {
 			if errText == "" {
 				s.status.Sent++
 				s.status.LastSentAt = time.Now()
-				s.status.LastError = ""
+				if note.Generation == s.status.Generation {
+					s.status.LastError = ""
+				}
 			} else {
 				s.status.Failed++
-				s.status.LastError = errText
+				if note.Generation == s.status.Generation {
+					s.status.LastError = errText
+				}
 			}
 			s.mu.Unlock()
 		}
@@ -52,7 +59,7 @@ func message(note notification) string {
 	e := note.Entry
 	title := "SublinkX 登录成功"
 	if !e.Success {
-		title = fmt.Sprintf("SublinkX 登录异常：5 分钟内累计 %d 次失败", note.Failures)
+		title = fmt.Sprintf("SublinkX 登录异常：5 分钟内至少 %d 次失败", note.Failures)
 	}
 	return fmt.Sprintf("%s\n时间：%s\n账号：%s\n来源 IP：%s\nIP 来源：%s\n设备：%s", title, e.Time.Format(time.RFC3339), e.Username, e.IP, e.IPSource, e.UserAgent)
 }

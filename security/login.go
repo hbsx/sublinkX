@@ -29,19 +29,21 @@ type Snapshot struct {
 }
 
 type Service struct {
-	mu         sync.Mutex
-	records    [HistoryLimit]Login
-	next       uint64
-	startedAt  time.Time
-	resolver   *IPResolver
-	config     Config
-	configPath string
-	status     Status
-	failCount  int
-	failStart  time.Time
-	lastFail   time.Time
-	queue      chan notification
-	client     func(Config) *http.Client
+	mu          sync.Mutex
+	records     [HistoryLimit]Login
+	next        uint64
+	startedAt   time.Time
+	resolver    *IPResolver
+	config      Config
+	configSaved bool
+	configPath  string
+	status      Status
+	failTimes   [5]time.Time
+	failNext    int
+	failCount   int
+	lastFail    time.Time
+	queue       chan notification
+	client      func(Config) *http.Client
 }
 
 func clean(value string, limit int) string {
@@ -58,8 +60,12 @@ func clean(value string, limit int) string {
 }
 
 func (s *Service) Record(request *http.Request, username string, success bool, reason string) {
+	s.recordAt(request, username, success, reason, time.Now())
+}
+
+func (s *Service) recordAt(request *http.Request, username string, success bool, reason string, now time.Time) {
 	ip, source := s.resolver.Resolve(request)
-	entry := Login{Time: time.Now(), Username: clean(username, 64), IP: ip,
+	entry := Login{Time: now, Username: clean(username, 64), IP: ip,
 		IPSource: source, UserAgent: clean(request.UserAgent(), 180), Success: success, Reason: reason}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,15 +77,21 @@ func (s *Service) Record(request *http.Request, username string, success bool, r
 	}
 	note := notification{Entry: entry, Config: s.config, Generation: s.status.Generation}
 	if !success {
-		if s.failStart.IsZero() || entry.Time.Sub(s.failStart) >= 5*time.Minute {
-			s.failStart, s.failCount = entry.Time, 0
+		// Keep only the last five timestamps: a true sliding window in fixed memory.
+		s.failTimes[s.failNext] = now
+		s.failNext = (s.failNext + 1) % len(s.failTimes)
+		if s.failCount < len(s.failTimes) {
+			s.failCount++
 		}
-		s.failCount++
-		if s.failCount < 5 || (!s.lastFail.IsZero() && entry.Time.Sub(s.lastFail) < 5*time.Minute) {
+		if s.failCount < len(s.failTimes) || now.Sub(s.failTimes[s.failNext]) > 5*time.Minute || (!s.lastFail.IsZero() && now.Sub(s.lastFail) < 5*time.Minute) {
 			return
 		}
-		note.Failures = s.failCount
-		s.failCount, s.lastFail, s.failStart = 0, entry.Time, entry.Time
+		note.Failures = len(s.failTimes)
+		// A full queue must not suppress the next opportunity for five minutes.
+		if s.enqueueLocked(note) {
+			s.lastFail = now
+		}
+		return
 	}
 	s.enqueueLocked(note)
 }

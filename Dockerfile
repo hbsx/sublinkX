@@ -2,8 +2,8 @@
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /webs
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-COPY webs/package.json webs/pnpm-lock.yaml ./
+RUN npm install --global pnpm@11.25.0 --ignore-scripts
+COPY webs/package.json webs/pnpm-lock.yaml webs/pnpm-workspace.yaml ./
 RUN HUSKY=0 pnpm install --frozen-lockfile --ignore-scripts
 COPY webs/ ./
 RUN pnpm rebuild esbuild vue-demi && pnpm build
